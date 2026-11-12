@@ -1,0 +1,2 @@
+# Claude Code keeps local permissions here; keep them off GitHub.
+.claude/settings.local.json
