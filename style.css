@@ -7,6 +7,8 @@
   --accent: #2f6fdb;
   --accent-fg: #ffffff;
   --live: #2e9e5b;
+  --age: 0;          /* 0 = new, 1 = very well used; set by chaos.js */
+  --stain: #b89a5a;  /* what old paper turns towards */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,6 +21,7 @@
     --accent: #7aa7ff;
     --accent-fg: #0d1b33;
     --live: #4cc27c;
+    --stain: #6b5a3a;
   }
 }
 
@@ -28,6 +31,7 @@
 body {
   margin: 0;
   background: var(--bg);
+  background: color-mix(in srgb, var(--bg), var(--stain) calc(var(--age) * 16%));   /* yellows with age */
   color: var(--fg);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -163,4 +167,192 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 @keyframes together-fade { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .together-float { animation: together-fade 1.5s forwards; }
+}
+
+/* ---- Chaos: the shared mess drawn by chaos.js ------------------------------------- */
+
+body.chaos-on { position: relative; }
+
+.chaos-layer { position: absolute; inset: 0; z-index: 5; overflow: hidden; pointer-events: none; }
+.chaos-layer canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.chaos-sticker {
+  position: absolute;
+  font-size: var(--size);
+  line-height: 1;
+  transform: translate(-50%, -50%) rotate(var(--rot, 0deg));
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.35));
+}
+.chaos-shape {
+  display: inline-block;
+  width: var(--size, 1.1rem);
+  height: var(--size, 1.1rem);
+  border: 2px solid rgb(0 0 0 / 0.3);
+  border-radius: 3px;
+  background: var(--accent);
+}
+.chaos-shape.circle { border-radius: 50%; }
+.chaos-shape.rect { width: calc(var(--size, 1.1rem) * 1.8); height: calc(var(--size, 1.1rem) * 0.9); }
+.chaos-shape.triangle { border: 0; border-radius: 0; clip-path: polygon(50% 4%, 98% 96%, 2% 96%); }
+.chaos-shape.tape {
+  width: calc(var(--size, 1.1rem) * 2.2);
+  height: calc(var(--size, 1.1rem) * 0.55);
+  border: 0;
+  border-radius: 1px;
+  background: rgb(232 218 170 / 0.78);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  clip-path: polygon(0 8%, 4% 0, 8% 10%, 12% 0, 88% 0, 92% 10%, 96% 0, 100% 8%,
+                     100% 92%, 96% 100%, 92% 90%, 88% 100%, 12% 100%, 8% 90%, 4% 100%, 0 92%);
+}
+.chaos-pick .chaos-shape.tape { width: 1.6rem; height: 0.55rem; }
+.chaos-pick .chaos-shape.rect { width: 1.5rem; height: 0.75rem; }
+
+/* While a tool is picked, this catches taps and drags instead of the page. */
+.chaos-capture { position: fixed; inset: 0; z-index: 9; cursor: crosshair; }
+.chaos-capture.sticker { cursor: copy; touch-action: manipulation; }
+.chaos-capture.spray, .chaos-capture.scrub { touch-action: none; }
+.chaos-capture.scrub { cursor: cell; }
+
+.together-mess {
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.together-mess[aria-expanded="true"] { background: var(--bg); }
+
+.chaos-tray {
+  position: fixed;
+  left: 50%;
+  bottom: 4.25rem;
+  z-index: 12;
+  width: min(27rem, calc(100% - 1.5rem));
+  max-height: 65vh;
+  overflow: auto;
+  padding: 0.85rem 1rem;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  font-size: 0.9rem;
+}
+.chaos-tray p { margin: 0.5rem 0 0; }
+.chaos-modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem; }
+.chaos-modes button { padding: 0.4rem 0.2rem; font-size: 0.85rem; }
+.chaos-modes button[aria-pressed="false"] { background: transparent; color: var(--accent); }
+.chaos-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-top: 0.6rem; }
+.chaos-pick {
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  font-size: 1.3rem;
+}
+.chaos-pick[aria-pressed="true"], .chaos-swatch[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chaos-swatches { display: flex; gap: 0.3rem; }
+.chaos-swatch { width: 1.8rem; height: 1.8rem; padding: 0; border: 1px solid rgb(0 0 0 / 0.25); border-radius: 50%; }
+.chaos-ink { flex: 1; min-width: 4rem; height: 0.5rem; border-radius: 999px; background: var(--border); overflow: hidden; }
+.chaos-ink span { display: block; height: 100%; background: var(--accent); }
+.chaos-hue { flex-direction: column; align-items: stretch; }
+.chaos-hue input {
+  width: 100%;
+  accent-color: var(--accent);
+  background: linear-gradient(90deg, hsl(0 70% 55%), hsl(60 70% 55%), hsl(120 70% 45%), hsl(180 70% 45%),
+                                     hsl(240 70% 60%), hsl(300 70% 55%), hsl(359 70% 55%));
+  border-radius: 999px;
+  height: 0.5rem;
+}
+.chaos-notice:empty { display: none; }
+
+/* ---- Age and wear: the site looks older the more it's used ----------------------------- */
+/* --age (0 new ... 1 ancient) comes from every click ever made on the site.  --wear (0 ... 1)
+   is per button or link.  Both are set by chaos.js.  "Hide the mess" adds .no-mess to <html>. */
+
+:root {
+  --grime: 105 75 30;           /* dirt, stains and burnt edges (r g b) */
+  --worn-hi: 255 250 235;       /* the light side of a crease */
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .28 0 0 0 0 .18 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --patchy: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='80'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.05 .45' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -3 0 0 0 1.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark) {
+  :root { --grime: 150 120 70; --worn-hi: 255 240 210; }
+}
+
+/* The page itself: yellowed, with coffee rings and water stains that scroll with it. */
+html:not(.no-mess) body {
+  background-color: color-mix(in srgb, var(--bg), var(--stain) calc(var(--age) * 38%));
+  background-image:
+    radial-gradient(circle at 84% 150px, transparent 0 54px, rgb(var(--grime) / calc(var(--age) * 0.24)) 55px 58px, transparent 62px),
+    radial-gradient(circle at 81% 172px, transparent 0 44px, rgb(var(--grime) / calc(var(--age) * 0.12)) 45px 47px, transparent 50px),
+    radial-gradient(circle at 10% 640px, transparent 0 38px, rgb(var(--grime) / calc(var(--age) * 0.18)) 39px 42px, transparent 45px),
+    radial-gradient(ellipse 280px 190px at 92% 940px, rgb(var(--grime) / calc(var(--age) * 0.16)), transparent 70%),
+    radial-gradient(ellipse 340px 230px at 4% 280px, rgb(var(--grime) / calc(var(--age) * 0.13)), transparent 70%),
+    radial-gradient(ellipse 220px 160px at 60% 1500px, rgb(var(--grime) / calc(var(--age) * 0.12)), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* Grain over everything, and screen edges that darken like old paper. */
+html:not(.no-mess) body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background-image:
+    radial-gradient(ellipse at 50% 45%, transparent 50%, rgb(var(--grime) / calc(var(--age) * 0.45)) 100%),
+    var(--noise);
+  opacity: calc(0.14 + var(--age) * 0.5);
+}
+
+/* Cards and links: they lean and slide, get creased, chipped and burnt at the edges. */
+html:not(.no-mess) .card,
+html:not(.no-mess) .experiments a {
+  --chip: calc(var(--age) * 20px);
+  rotate: calc(var(--age) * var(--lean, 1.2deg));
+  translate: calc(var(--age) * var(--shift, 4px)) 0;
+  background-image: linear-gradient(var(--crease, 112deg), transparent 46%,
+    rgb(var(--worn-hi) / calc(var(--age) * 0.4)) 49.3%, rgb(var(--grime) / calc(var(--age) * 0.22)) 50.7%, transparent 54%);
+  box-shadow: inset 0 0 calc(var(--age) * 48px) rgb(var(--grime) / calc(var(--age) * 0.34));
+  clip-path: polygon(0 0, calc(100% - var(--chip)) 0, 100% var(--chip), 100% 100%,
+                     calc(var(--chip) * 0.7) 100%, 0 calc(100% - var(--chip) * 0.7));
+}
+.card:nth-of-type(2n), .experiments li:nth-child(2n) a { --lean: -1.7deg; --shift: -6px; --crease: 64deg; }
+.card:nth-of-type(3n), .experiments li:nth-child(3n) a { --lean: 2.3deg; --shift: 8px; --crease: 158deg; }
+
+/* Headings and intros look rubbed off in patches. */
+html:not(.no-mess) h1,
+html:not(.no-mess) h2,
+html:not(.no-mess) .lede {
+  --fade: calc(1 - var(--age) * 0.62);
+  -webkit-mask-image: linear-gradient(rgb(0 0 0 / var(--fade)), rgb(0 0 0 / var(--fade))), var(--patchy);
+  mask-image: linear-gradient(rgb(0 0 0 / var(--fade)), rgb(0 0 0 / var(--fade))), var(--patchy);
+  -webkit-mask-size: auto, 160px 80px;
+  mask-size: auto, 160px 80px;
+}
+
+/* Much-used buttons and links: grimy, crooked, knocked out of place, rubbed through. */
+html:not(.no-mess) .worn {
+  --rub: calc(1 - var(--wear) * 0.5);
+  filter: sepia(var(--wear)) saturate(calc(1 - var(--wear) * 0.6)) contrast(calc(1 - var(--wear) * 0.2))
+          brightness(calc(1 - var(--wear) * 0.12));
+  rotate: calc(var(--wear) * var(--tilt, 0deg));
+  translate: calc(var(--wear) * var(--nudge, 0px)) calc(var(--wear) * 2px);
+  -webkit-mask-image: linear-gradient(rgb(0 0 0 / var(--rub)), rgb(0 0 0 / var(--rub))), var(--patchy);
+  mask-image: linear-gradient(rgb(0 0 0 / var(--rub)), rgb(0 0 0 / var(--rub))), var(--patchy);
+  -webkit-mask-size: auto, 90px 45px;
+  mask-size: auto, 90px 45px;
+}
+html:not(.no-mess) button.worn,
+html:not(.no-mess) .experiments a.worn {
+  box-shadow: inset 0 0 calc(var(--wear) * 26px) rgb(var(--grime) / calc(var(--wear) * 0.8)),
+              inset 0 calc(var(--wear) * -3px) 0 rgb(var(--grime) / calc(var(--wear) * 0.4));
 }

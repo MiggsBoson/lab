@@ -7,7 +7,25 @@
   <link rel="stylesheet" href="style.css">
   <style>
     /* Styles only this page needs. */
-    .shoutbox { margin-top: 2rem; }
+    .ideas { margin-top: 2rem; }
+    #idea-form input { flex: 1 1 12rem; width: auto; }
+    #idea-notice:empty { display: none; }
+    .ideas-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.6rem; }
+    .ideas-list li { display: flex; gap: 0.75rem; align-items: flex-start; overflow-wrap: anywhere; }
+    .ideas-list .vote { flex: none; min-width: 3.2rem; padding: 0.3rem 0.5rem; font-variant-numeric: tabular-nums; }
+    .ideas-list .vote[aria-pressed="false"] { background: transparent; color: var(--accent); }
+    .ideas-list .done { opacity: 0.65; }
+    .badge {
+      display: inline-block;
+      margin-right: 0.35rem;
+      padding: 0 0.4rem;
+      border-radius: 999px;
+      background: var(--live);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .shoutbox { margin-top: 1rem; }
     #shout-form input { flex: 1 1 8rem; width: auto; }
     #shout-form #shout-text { flex: 3 1 12rem; }
     #shout-notice:empty { display: none; }
@@ -58,6 +76,18 @@
         </a>
       </li>
     </ul>
+
+    <section class="card ideas" aria-labelledby="ideas-heading">
+      <h2 id="ideas-heading">What should the lab do next?</h2>
+      <p class="muted">Suggest anything and vote for what you like (one vote each).  The top idea gets built next.</p>
+      <form id="idea-form" class="row">
+        <input id="idea-text" type="text" placeholder="My idea…" maxlength="140"
+               aria-label="Your idea" autocomplete="off" required>
+        <button data-wear="suggest">Suggest</button>
+      </form>
+      <p id="idea-notice" class="muted" aria-live="polite" style="margin-top: 0.75rem;"></p>
+      <ol id="ideas" class="ideas-list"></ol>
+    </section>
 
     <section class="card shoutbox" aria-labelledby="shout-heading">
       <h2 id="shout-heading">Shout box</h2>
@@ -140,6 +170,88 @@
     on("shouts", (msg) => { shouts = msg.shouts; render(); });
     on("notice", (msg) => { if (msg.about === "shout") $("shout-notice").textContent = msg.text; });
     setInterval(render, 30_000);   // keep "5 min ago" up to date
+
+    // ---- Suggestions: most votes first; the top one not done yet is "Next up" ----
+
+    let ideas = [];
+
+    function renderIdeas() {
+      const list = $("ideas");
+      list.replaceChildren();
+      const open = ideas.filter((i) => !i.done).sort((a, b) => b.votes - a.votes || a.at - b.at);
+      const done = ideas.filter((i) => i.done).sort((a, b) => b.at - a.at);
+      if (!open.length && !done.length) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "No ideas yet.  What would make you come back?";
+        list.append(li);
+        return;
+      }
+      [...open, ...done].forEach((idea, i) => {
+        const li = document.createElement("li");
+        if (idea.done) li.className = "done";
+
+        const vote = document.createElement("button");
+        vote.type = "button";
+        vote.className = "vote";
+        vote.dataset.wear = "vote";
+        vote.textContent = `▲ ${idea.votes}`;
+        vote.setAttribute("aria-pressed", idea.voted);
+        vote.setAttribute("aria-label", `${idea.voted ? "Remove your vote" : "Vote"} (${idea.votes} votes)`);
+        vote.disabled = idea.done;
+        vote.addEventListener("click", () => send({ type: "vote", id: idea.id }));
+
+        const body = document.createElement("div");
+        const text = document.createElement("div");
+        if (idea.done || i === 0) {
+          const badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = idea.done ? "✓ Done" : "Next up";
+          text.append(badge);
+        }
+        text.append(document.createTextNode(idea.text));
+        const meta = document.createElement("div");
+        meta.className = "muted who";
+        meta.textContent = timeAgo(idea.at);
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = "linkish";
+        if (idea.mine) {
+          action.textContent = "delete";
+          action.addEventListener("click", () => send({ type: "unsuggest", id: idea.id }));
+        } else {
+          action.textContent = "report";
+          action.addEventListener("click", () => {
+            if (!confirm("Report this idea?  Two reports hide it.")) return;
+            send({ type: "report-suggestion", id: idea.id });
+            action.textContent = "reported";
+            action.disabled = true;
+          });
+        }
+        if (!idea.done) meta.append(action);
+        body.append(text, meta);
+        li.append(vote, body);
+        list.append(li);
+      });
+    }
+
+    on("suggestions", (msg) => { ideas = msg.list; renderIdeas(); });
+    on("notice", (msg) => { if (msg.about === "suggest") $("idea-notice").textContent = msg.text; });
+    setInterval(renderIdeas, 30_000);
+
+    $("idea-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = $("idea-text").value.trim();
+      if (!text) return;
+      if (send({ type: "suggest", text })) {
+        $("idea-text").value = "";
+        $("idea-notice").textContent = "";
+      } else {
+        $("idea-notice").textContent = "Not connected yet.  Try again in a moment.";
+      }
+    });
+
+    // ---- Shout box ----------------------------------------------------------------
 
     $("shout-form").addEventListener("submit", (e) => {
       e.preventDefault();

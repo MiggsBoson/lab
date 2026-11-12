@@ -29,6 +29,11 @@ Deploy a change to it (needs `npx wrangler login` once):
 cd ~/lab/server && npx wrangler deploy
 ```
 
+`chaos.js` (loaded by `together.js`) is the shared mess: stickers, spray paint, wear and
+the site's shared colour.  `admin/` resets it and moderates shouts and suggestions; it needs
+the admin key, set once with `npx wrangler secret put ADMIN_KEY` (for `wrangler dev`, put
+`ADMIN_KEY=...` in `server/.dev.vars`, which git ignores).
+
 `chess/chess.js` is a copy of `server/node_modules/chess.js/dist/esm/chess.js`; if you upgrade
 chess.js, copy it again so the page and the server use the same rules.
 

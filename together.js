@@ -9,10 +9,17 @@
 //   on("chess", (msg) => ...);          // run when the server sends a "chess" message
 //   send({ type: "move", from: "e2", to: "e4" });
 
+import { startChaos } from "./chaos.js";
+
 // On this computer, talk to `npx wrangler dev`; online, to the deployed server.
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
 const SERVER = LOCAL ? "ws://localhost:8787/ws" : "wss://lab-live.dmwyap.workers.dev/ws";
 const EMOJIS = ["👋", "😂", "❤️", "🔥", "🎉", "😮"];
+
+// Which page this is: "home", "chess", "live" ...  (the site lives under /lab/ online)
+const parts = location.pathname.split("/").filter((p) => p && p !== "index.html");
+if (parts[0] === "lab") parts.shift();
+export const PAGE = parts[0] || "home";
 
 // ---- Messages to and from the server -------------------------------------------
 
@@ -57,7 +64,7 @@ function connect() {
   socket = new WebSocket(SERVER);
   socket.addEventListener("open", () => {
     retries = 0;
-    socket.send(JSON.stringify({ type: "hello", id: visitorId() }));
+    socket.send(JSON.stringify({ type: "hello", id: visitorId(), page: PAGE }));
     emit("open");
   });
   socket.addEventListener("message", (event) => {
@@ -110,5 +117,8 @@ on("react", (msg) => {
   document.body.append(span);
   span.addEventListener("animationend", () => span.remove());
 });
+
+// Stickers, paint, wear and the shared colours (not on the admin page).
+if (PAGE !== "admin") startChaos({ on, send, page: PAGE, bar });
 
 connect();

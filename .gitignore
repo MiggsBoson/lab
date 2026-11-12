@@ -7,3 +7,6 @@ CLAUDE.md
 # Server tools: installed packages and Wrangler's local files.
 node_modules/
 .wrangler/
+
+# Wrangler's local secrets file (test admin key for wrangler dev).
+.dev.vars
