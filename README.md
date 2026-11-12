@@ -10,7 +10,27 @@ Live at **https://miggsboson.github.io/lab/**.  Every push to `main` updates it 
 cd ~/lab && python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000.
+Then open http://localhost:8000.  On localhost the live features (chess, shout box,
+"here now", reactions) talk to a local copy of the server, so also run:
+
+```bash
+cd ~/lab/server && npx wrangler dev
+```
+
+## The live server
+
+`server/` is a Cloudflare Worker with one Durable Object (`server/src/index.js`).  Every page
+loads `together.js`, which keeps one WebSocket open to it.  It holds the chess game and the
+shout box, counts who's here and passes on reactions.  It only accepts the lab's own pages.
+
+Deploy a change to it (needs `npx wrangler login` once):
+
+```bash
+cd ~/lab/server && npx wrangler deploy
+```
+
+`chess/chess.js` is a copy of `server/node_modules/chess.js/dist/esm/chess.js`; if you upgrade
+chess.js, copy it again so the page and the server use the same rules.
 
 ## Publish a change
 
