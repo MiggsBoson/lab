@@ -34,6 +34,11 @@ the site's shared colour.  `admin/` resets it and moderates shouts and suggestio
 the admin key, set once with `npx wrangler secret put ADMIN_KEY` (for `wrangler dev`, put
 `ADMIN_KEY=...` in `server/.dev.vars`, which git ignores).
 
+`events.js` shows the surprises the server sets off now and then (snow, gravity, a ghost, a
+golden key ...).  To add one: give it a length in `EVENTS` in `server/src/index.js`, then a line
+in `TEXT` and a function in `EFFECTS` in `events.js`.  The admin page can start and stop them
+and shows daily usage counts.
+
 `chess/chess.js` is a copy of `server/node_modules/chess.js/dist/esm/chess.js`; if you upgrade
 chess.js, copy it again so the page and the server use the same rules.
 

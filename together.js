@@ -10,6 +10,7 @@
 //   send({ type: "move", from: "e2", to: "e4" });
 
 import { startChaos } from "./chaos.js";
+import { startEvents } from "./events.js";
 
 // On this computer, talk to `npx wrangler dev`; online, to the deployed server.
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -118,7 +119,11 @@ on("react", (msg) => {
   span.addEventListener("animationend", () => span.remove());
 });
 
-// Stickers, paint, wear and the shared colours (not on the admin page).
-if (PAGE !== "admin") startChaos({ on, send, page: PAGE, bar });
+// Stickers, paint, wear and the shared colours, and the server's surprise events
+// (not on the admin page).
+if (PAGE !== "admin") {
+  startChaos({ on, send, page: PAGE, bar });
+  startEvents({ on, send, page: PAGE });
+}
 
 connect();

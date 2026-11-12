@@ -17,7 +17,7 @@ const STICKERS = [
   ["gem", "💎"], ["planet", "🪐"], ["flower", "🌼"], ["alien", "👽"], ["rocket", "🚀"],
   ["circle", ""], ["square", ""], ["rect", ""], ["triangle", ""], ["tape", ""],
 ];
-const EMOJI = Object.fromEntries(STICKERS);
+const EMOJI = { ...Object.fromEntries(STICKERS), trophy: "🏆" };   // trophies come from the golden key
 const PAINT = ["#e63946", "#f4a261", "#2a9d8f", "#3a86ff", "#8338ec", "#111111", "#ffffff"];
 const BRUSH = 14;                      // units
 const INK_MAX = 6000;                  // units of line; matches the server
@@ -364,7 +364,12 @@ export function startChaos({ on, send, page, bar }) {
     send({ type: "repaint", hue: Number(hueInput.value) });
   });
 
+  let paintParty = false;              // a surprise event: unlimited ink for everyone
+  on("event", (msg) => { paintParty = msg.kind === "paintparty"; });
+  on("event-end", () => { paintParty = false; });
+
   function currentInk() {
+    if (paintParty) return INK_MAX;
     return Math.min(INK_MAX, ink + ((Date.now() - inkAt) / 1000) * INK_PER_SEC);
   }
 

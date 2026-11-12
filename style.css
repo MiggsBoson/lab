@@ -356,3 +356,101 @@ html:not(.no-mess) .experiments a.worn {
   box-shadow: inset 0 0 calc(var(--wear) * 26px) rgb(var(--grime) / calc(var(--wear) * 0.8)),
               inset 0 calc(var(--wear) * -3px) 0 rgb(var(--grime) / calc(var(--wear) * 0.4));
 }
+
+/* ---- Surprise events (events.js) ---------------------------------------------------------- */
+
+.event-banner {
+  position: fixed;
+  left: 50%;
+  top: 0.75rem;
+  z-index: 13;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.35rem 0.6rem 0.35rem 0.9rem;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.18);
+  font-size: 0.9rem;
+}
+.event-clock {
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-canvas { position: fixed; inset: 0; z-index: 6; width: 100%; height: 100%; pointer-events: none; }
+
+html.ev-gravity main :is(.card, .experiments a, h1, .lede, .board, #status, footer) {
+  translate: 0 var(--fall, 60px) !important;
+  rotate: var(--swing, 6deg) !important;
+  transition: translate 2.4s cubic-bezier(0.5, 0, 0.75, 1.35), rotate 2.4s ease-in;
+}
+
+html.ev-flip main { rotate: 180deg; transition: rotate 1.2s ease-in-out; }
+html.ev-flip .chaos-layer { visibility: hidden; }
+
+html.ev-disco main, html.ev-disco .chaos-layer { animation: ev-hue 1.6s linear infinite; }
+html.ev-disco body::before {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  z-index: 3;
+  pointer-events: none;
+  background: conic-gradient(rgb(255 0 120 / 0.14), rgb(0 200 255 / 0.14), rgb(255 230 0 / 0.14),
+                             rgb(120 0 255 / 0.14), rgb(255 0 120 / 0.14));
+  animation: ev-spin 4s linear infinite;
+}
+@keyframes ev-hue { to { filter: hue-rotate(360deg); } }
+@keyframes ev-spin { to { rotate: 360deg; } }
+
+.event-torch {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  background: radial-gradient(circle 150px at var(--mx, 50%) var(--my, 45%), transparent 55%, rgb(0 0 0 / 0.95) 100%);
+}
+
+.event-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 8;
+  margin: -1.2rem 0 0 -1.2rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 2.4rem;
+  line-height: 1;
+  opacity: 0.85;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.3));
+}
+.event-ghost:hover { filter: drop-shadow(0 2px 4px rgb(0 0 0 / 0.3)); }
+
+.event-key {
+  position: absolute;
+  z-index: 7;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  filter: drop-shadow(0 0 6px rgb(255 200 40 / 0.9));
+  animation: ev-glint 1.8s ease-in-out infinite;
+}
+@keyframes ev-glint { 50% { filter: drop-shadow(0 0 14px rgb(255 210 60 / 1)); scale: 1.12; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html.ev-disco main, html.ev-disco .chaos-layer, html.ev-disco body::before, .event-key { animation: none; }
+  html.ev-gravity main :is(.card, .experiments a, h1, .lede, .board, #status, footer) { transition: none; }
+}
+.event-key:active { transform: translate(-50%, -50%); }
