@@ -5,16 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Playground · The lab</title>
   <link rel="stylesheet" href="../style.css">
+  <style>
+    /* Styles only this page needs. */
+    .die { font-size: 3rem; line-height: 1; }
+    .swatch {
+      width: 3.5rem;
+      height: 3.5rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--accent);
+      transition: background 0.3s;
+    }
+  </style>
 </head>
 <body>
   <main>
     <p><a href="../">← The lab</a></p>
     <h1>Playground</h1>
-    <p class="lede">Buttons and other bits to poke at.  Each box is a small pattern you can copy into a real experiment.</p>
+    <p class="lede">Buttons to poke at.  Nothing here is saved or sent anywhere.</p>
 
     <section class="card">
       <h2>Counter</h2>
-      <p class="muted">Buttons that change a number.  It stays the same when you reload.</p>
       <div class="row">
         <button id="minus" class="secondary" aria-label="Minus one">−</button>
         <span id="counter" class="big">0</span>
@@ -24,151 +35,90 @@
     </section>
 
     <section class="card">
-      <h2>Say hello</h2>
-      <p class="muted">Text that changes as you type.</p>
-      <input id="name" type="text" placeholder="Your name" aria-label="Your name" autocomplete="given-name">
-      <p id="greeting" class="big" style="text-align: left; margin-top: 0.75rem;">Hello, stranger.</p>
-    </section>
-
-    <section class="card">
-      <h2>Who's buying?</h2>
-      <p class="muted">Type some names with commas between them, then let the button pick one.</p>
-      <input id="names" type="text" placeholder="Aoife, Cian, Niamh" aria-label="Names, separated by commas">
+      <h2>Roll a die</h2>
       <div class="row">
-        <button id="pick">Pick someone</button>
-        <strong id="picked" aria-live="polite"></strong>
+        <button id="roll">Roll</button>
+        <span id="die" class="die" aria-live="polite">⚀</span>
       </div>
     </section>
 
     <section class="card">
-      <h2>Quick poll</h2>
-      <p class="muted">What should the lab build first?  Your vote is saved on this device only, so copy it and paste it into Messenger.</p>
-      <div class="row" id="poll" role="group" aria-label="Poll options">
-        <button class="secondary" data-choice="Predictions league" aria-pressed="false">Predictions league</button>
-        <button class="secondary" data-choice="Daily quiz" aria-pressed="false">Daily quiz</button>
-        <button class="secondary" data-choice="Something else" aria-pressed="false">Something else</button>
-      </div>
+      <h2>Flip a coin</h2>
       <div class="row">
-        <button id="copy" disabled>Copy my vote</button>
-        <span id="copied" class="muted" aria-live="polite"></span>
+        <button id="flip">Flip</button>
+        <strong id="coin" aria-live="polite"></strong>
+      </div>
+      <p id="tally" class="muted" style="margin-top: 0.75rem;">Heads 0 · Tails 0</p>
+    </section>
+
+    <section class="card">
+      <h2>Random colour</h2>
+      <div class="row">
+        <button id="paint">New colour</button>
+        <div id="swatch" class="swatch" aria-hidden="true"></div>
+        <code id="hex"></code>
       </div>
     </section>
   </main>
 
   <script>
-    // ---- Helpers -------------------------------------------------------------
-
     // Find an element by its id="..." in the HTML above.
     const $ = (id) => document.getElementById(id);
 
-    // Save and load values in this browser (localStorage).  Nothing leaves the
-    // device; shared data comes later with Supabase.  try/catch because some
-    // browsers block storage, e.g. in private windows.
-    function load(key, fallback) {
-      try {
-        const saved = localStorage.getItem(key);
-        return saved === null ? fallback : JSON.parse(saved);
-      } catch (e) {
-        return fallback;
-      }
-    }
-    function save(key, value) {
-      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
-    }
+    // A whole number from 0 up to (but not including) n.
+    const randomInt = (n) => Math.floor(Math.random() * n);
 
-    // ---- 1. Counter: several buttons changing one value ----------------------
+    // ---- Counter: several buttons changing one number ------------------------
 
-    let count = load("playground-count", 0);
-
-    function showCount() {
-      $("counter").textContent = count;
-      save("playground-count", count);
-    }
+    let count = 0;
+    const showCount = () => { $("counter").textContent = count; };
 
     $("plus").addEventListener("click", () => { count += 1; showCount(); });
     $("minus").addEventListener("click", () => { count -= 1; showCount(); });
     $("reset").addEventListener("click", () => { count = 0; showCount(); });
-    showCount();
 
-    // ---- 2. Say hello: the "input" event fires on every keystroke ------------
+    // ---- Roll a die: flick through faces, then stop on one -------------------
 
-    const nameBox = $("name");
-    nameBox.value = load("playground-name", "");
+    const faces = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 
-    function greet() {
-      const name = nameBox.value.trim();
-      // textContent (not innerHTML) so whatever people type is shown as plain text.
-      $("greeting").textContent = name ? `Hello, ${name}!` : "Hello, stranger.";
-      save("playground-name", nameBox.value);
-    }
-
-    nameBox.addEventListener("input", greet);
-    greet();
-
-    // ---- 3. Who's buying: split text into a list, pick one at random ---------
-
-    const namesBox = $("names");
-    namesBox.value = load("playground-names", "");
-    namesBox.addEventListener("input", () => save("playground-names", namesBox.value));
-
-    $("pick").addEventListener("click", () => {
-      const names = namesBox.value.split(",").map((n) => n.trim()).filter((n) => n);
-      const out = $("picked");
-      const button = $("pick");
-
-      if (names.length === 0) {
-        out.textContent = "Add some names first.";
-        return;
-      }
-
-      // Flick through random names for a moment, then stop on one.
+    $("roll").addEventListener("click", () => {
+      const button = $("roll");
+      const die = $("die");
       button.disabled = true;
-      out.setAttribute("aria-busy", "true");   // screen readers wait for the final name
-      let flips = 0;
+      die.setAttribute("aria-busy", "true");   // screen readers wait for the final face
+      let flicks = 0;
       const timer = setInterval(() => {
-        out.textContent = names[Math.floor(Math.random() * names.length)];
-        flips += 1;
-        if (flips === 12) {
+        const n = randomInt(6);
+        die.textContent = faces[n];
+        die.setAttribute("aria-label", `You rolled ${n + 1}`);
+        flicks += 1;
+        if (flicks === 10) {
           clearInterval(timer);
-          out.textContent += " 🎉";
-          out.setAttribute("aria-busy", "false");
+          die.setAttribute("aria-busy", "false");
           button.disabled = false;
         }
-      }, 70);
+      }, 60);
     });
 
-    // ---- 4. Quick poll: one handler for several buttons, plus copy-to-share --
+    // ---- Flip a coin: a random choice plus a running tally -------------------
 
-    let vote = load("playground-vote", null);
-    const pollButtons = document.querySelectorAll("#poll button");
+    let heads = 0;
+    let tails = 0;
 
-    function showVote() {
-      // data-choice="..." in the HTML says which option each button is.
-      pollButtons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.choice === vote));
-      $("copy").disabled = !vote;
-    }
-
-    pollButtons.forEach((b) => {
-      b.addEventListener("click", () => {
-        vote = b.dataset.choice;
-        save("playground-vote", vote);
-        $("copied").textContent = "";
-        showVote();
-      });
+    $("flip").addEventListener("click", () => {
+      if (Math.random() < 0.5) { heads += 1; $("coin").textContent = "Heads"; }
+      else { tails += 1; $("coin").textContent = "Tails"; }
+      $("tally").textContent = `Heads ${heads} · Tails ${tails}`;
     });
 
-    $("copy").addEventListener("click", async () => {
-      const text = `My vote for the lab's first experiment: ${vote}.  Vote here: ${location.href}`;
-      try {
-        await navigator.clipboard.writeText(text);
-        $("copied").textContent = "Copied.  Paste it into Messenger.";
-      } catch (e) {
-        // Some browsers refuse clipboard access; show the text so it can be copied by hand.
-        $("copied").textContent = text;
-      }
-    });
+    // ---- Random colour: change a style from JavaScript -----------------------
 
-    showVote();
+    $("paint").addEventListener("click", () => {
+      // A random number from 0 to 0xffffff, written as six hex digits.
+      const hex = "#" + randomInt(0x1000000).toString(16).padStart(6, "0");
+      $("swatch").style.background = hex;
+      $("hex").textContent = hex;
+    });
   </script>
 </body>
 </html>
