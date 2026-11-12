@@ -2,6 +2,8 @@
 
 Small web experiments, hosted free on GitHub Pages.  Plain HTML, CSS and JavaScript.
 
+Live at **https://miggsboson.github.io/lab/**.  Every push to `main` updates it (about a minute).
+
 ## Preview locally
 
 ```bash
@@ -10,17 +12,13 @@ cd ~/lab && python3 -m http.server 8000
 
 Then open http://localhost:8000.
 
-## Put it online (once)
-
-1. On github.com, create an empty public repo called `lab` (no README, no licence).
-2. Push this folder to it (replace `USERNAME`):
+## Publish a change
 
 ```bash
-cd ~/lab && git add -A && git commit -m "Start the lab" && git remote add origin https://github.com/USERNAME/lab.git && git push -u origin main
+cd ~/lab && git add -A && git commit -m "Describe the change" && git push
 ```
 
-3. In the repo: Settings → Pages → "Deploy from a branch" → `main`, `/ (root)` → Save.
-4. About a minute later it is live at `https://USERNAME.github.io/lab/`.  Every push updates it.
+Repo: https://github.com/MiggsBoson/lab (Pages: Settings → Pages, deploying `main`, `/ (root)`).
 
 ## Add an experiment
 
