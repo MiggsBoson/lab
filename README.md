@@ -23,7 +23,10 @@ cd ~/lab/server && npx wrangler dev
 loads `together.js`, which keeps one WebSocket open to it.  It holds the chess game and the
 shout box, counts who's here and passes on reactions.  It only accepts the lab's own pages.
 
-Deploy a change to it (needs `npx wrangler login` once):
+It deploys itself: when a change to `server/` reaches `main` (e.g. you merge a pull request),
+the GitHub Action in `.github/workflows/deploy-server.yml` runs `wrangler deploy`, using the
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets.  To deploy by hand
+instead (needs `npx wrangler login` once):
 
 ```bash
 cd ~/lab/server && npx wrangler deploy
