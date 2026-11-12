@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hello · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Hello</h1>
+    <p class="lede">Copy this folder to start a new experiment, then add it to the home page.</p>
+
+    <p><button id="tap">Tap me</button> <span id="count">0</span> taps on this device.</p>
+  </main>
+
+  <script>
+    // A tiny bit of JavaScript, so the template shows where code goes.
+    // The count is kept only in this browser; shared data comes later (Supabase).
+    const key = "hello-taps";
+    let taps = 0;
+    try { taps = Number(localStorage.getItem(key)) || 0; } catch (e) {}
+    const count = document.getElementById("count");
+    count.textContent = taps;
+    document.getElementById("tap").addEventListener("click", () => {
+      taps += 1;
+      count.textContent = taps;
+      try { localStorage.setItem(key, taps); } catch (e) {}
+    });
+  </script>
+</body>
+</html>
