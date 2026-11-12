@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live data · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    /* Styles only this page needs. */
+    :root { --live: #2e9e5b; }
+    @media (prefers-color-scheme: dark) { :root { --live: #4cc27c; } }
+
+    .now { display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.75rem; }
+    .now .icon { font-size: 3rem; line-height: 1; }
+    .now .big { min-width: 0; text-align: left; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+      gap: 0.5rem 1rem;
+      margin: 0 0 0.75rem;
+    }
+    .stats dt { color: var(--muted); font-size: 0.85rem; }
+    .stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    .dot {
+      display: inline-block;
+      width: 0.55rem;
+      height: 0.55rem;
+      margin-right: 0.35rem;
+      border-radius: 50%;
+      background: var(--live);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+    @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+
+    .dog {
+      display: block;
+      width: 100%;
+      height: 18rem;
+      margin: 0 0 0.75rem;
+      object-fit: cover;
+      border-radius: 8px;
+      background: var(--border);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Live data</h1>
+    <p class="lede">Real data from free public services, fetched fresh while you watch.</p>
+
+    <section class="card">
+      <h2>Weather</h2>
+      <p id="w-place" class="muted">Dublin</p>
+      <div class="now">
+        <span id="w-icon" class="icon" aria-hidden="true">…</span>
+        <span id="w-temp" class="big">–</span>
+        <span id="w-text"></span>
+      </div>
+      <dl class="stats">
+        <div><dt>Feels like</dt><dd id="w-feels">–</dd></div>
+        <div><dt>Wind</dt><dd id="w-wind">–</dd></div>
+        <div><dt>Today</dt><dd id="w-range">–</dd></div>
+      </dl>
+      <div class="row">
+        <button id="w-dublin" class="secondary">Dublin</button>
+        <button id="w-random">Somewhere random</button>
+        <span id="w-status" class="muted" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Where's the space station?</h2>
+      <p class="muted"><span class="dot" aria-hidden="true"></span>Live: updates every 5 seconds.</p>
+      <dl class="stats">
+        <div><dt>Above</dt><dd id="iss-pos">–</dd></div>
+        <div><dt>From Dublin</dt><dd id="iss-dist">–</dd></div>
+        <div><dt>Speed</dt><dd id="iss-speed">–</dd></div>
+        <div><dt>Height</dt><dd id="iss-alt">–</dd></div>
+        <div><dt>Light</dt><dd id="iss-light">–</dd></div>
+      </dl>
+      <p><a id="iss-map" href="https://www.openstreetmap.org/" target="_blank" rel="noopener">See it on a map</a>
+        · <span id="iss-status" class="muted"></span></p>
+    </section>
+
+    <section class="card">
+      <h2>Random dog</h2>
+      <img id="dog-img" class="dog" alt="">
+      <div class="row">
+        <button id="dog-btn">Another dog</button>
+        <span id="dog-breed" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <footer>
+      Data from <a href="https://open-meteo.com/">Open-Meteo</a>,
+      <a href="https://wheretheiss.at/">Where the ISS at?</a> and
+      <a href="https://dog.ceo/dog-api/">Dog CEO</a>.  Your browser asks them directly,
+      so they see your IP address, as any website does.  Nothing else is sent.
+    </footer>
+  </main>
+
+  <script>
+    // ---- Helpers -------------------------------------------------------------
+
+    const $ = (id) => document.getElementById(id);
+
+    // Ask a web service for data.  fetch() returns a "promise", so we "await" it.
+    async function getJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    const DUBLIN = { name: "Dublin", lat: 53.3498, lon: -6.2603 };
+
+    const fmtLat = (lat) => `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? "N" : "S"}`;
+    const fmtLon = (lon) => `${Math.abs(lon).toFixed(2)}°${lon >= 0 ? "E" : "W"}`;
+    const fmtNum = (n) => Math.round(n).toLocaleString("en-IE");
+
+    function mapLink(lat, lon, zoom) {
+      const a = lat.toFixed(4), b = lon.toFixed(4);
+      return `https://www.openstreetmap.org/?mlat=${a}&mlon=${b}#map=${zoom}/${a}/${b}`;
+    }
+
+    // Distance along the ground between two points (haversine formula).
+    function distanceKm(lat1, lon1, lat2, lon2) {
+      const r = Math.PI / 180;
+      const h = Math.sin((lat2 - lat1) * r / 2) ** 2 +
+        Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+      return 2 * 6371 * Math.asin(Math.sqrt(h));
+    }
+
+    // ---- Weather (Open-Meteo) ------------------------------------------------
+
+    // Open-Meteo gives a number code for the weather; this turns it into words.
+    const WEATHER = [
+      [[0], "Clear sky", "☀️", "🌙"],
+      [[1], "Mainly clear", "🌤️", "🌙"],
+      [[2], "Partly cloudy", "⛅", "☁️"],
+      [[3], "Overcast", "☁️", "☁️"],
+      [[45, 48], "Fog", "🌫️", "🌫️"],
+      [[51, 53, 55, 56, 57], "Drizzle", "🌦️", "🌧️"],
+      [[61, 63, 65, 66, 67], "Rain", "🌧️", "🌧️"],
+      [[71, 73, 75, 77], "Snow", "🌨️", "🌨️"],
+      [[80, 81, 82], "Rain showers", "🌦️", "🌧️"],
+      [[85, 86], "Snow showers", "🌨️", "🌨️"],
+      [[95, 96, 99], "Thunderstorm", "⛈️", "⛈️"],
+    ];
+    function describe(code, isDay) {
+      const row = WEATHER.find(([codes]) => codes.includes(code));
+      if (!row) return ["Unknown", "❔"];
+      return [row[1], isDay ? row[2] : row[3]];
+    }
+
+    let place = DUBLIN;
+    let weatherRequest = 0;   // so a slow old answer can't overwrite a newer one
+
+    async function loadWeather() {
+      const mine = ++weatherRequest;
+      $("w-status").textContent = "Loading…";
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}` +
+        "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day" +
+        "&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1";
+      try {
+        const data = await getJSON(url);
+        if (mine !== weatherRequest) return;
+        const now = data.current;
+        const [text, icon] = describe(now.weather_code, now.is_day);
+        $("w-icon").textContent = icon;
+        $("w-temp").textContent = `${Math.round(now.temperature_2m)}°C`;
+        $("w-text").textContent = text;
+        $("w-feels").textContent = `${Math.round(now.apparent_temperature)}°C`;
+        $("w-wind").textContent = `${Math.round(now.wind_speed_10m)} km/h`;
+        $("w-range").textContent =
+          `${Math.round(data.daily.temperature_2m_min[0])} to ${Math.round(data.daily.temperature_2m_max[0])}°C`;
+        // The time there right now: UTC plus that place's offset from UTC.
+        const local = new Date(Date.now() + data.utc_offset_seconds * 1000);
+        $("w-status").textContent = `Local time there: ${local.toISOString().slice(11, 16)}`;
+      } catch (e) {
+        if (mine === weatherRequest) $("w-status").textContent = "Couldn't reach the weather service.  Try again.";
+      }
+    }
+
+    // Show where we are; for a random spot, add a map link.
+    function showPlace() {
+      const p = $("w-place");
+      if (place === DUBLIN) { p.textContent = "Dublin"; return; }
+      p.textContent = `Somewhere random: ${fmtLat(place.lat)}, ${fmtLon(place.lon)} · `;
+      const a = document.createElement("a");
+      a.href = mapLink(place.lat, place.lon, 5);
+      a.target = "_blank";
+      a.rel = "noopener";
+      a.textContent = "where is that?";
+      p.append(a);
+    }
+
+    $("w-dublin").addEventListener("click", () => { place = DUBLIN; showPlace(); loadWeather(); });
+    $("w-random").addEventListener("click", () => {
+      // Pick a point evenly over the globe (so it isn't bunched up at the poles).
+      const lat = Math.asin(2 * Math.random() - 1) * 180 / Math.PI;
+      const lon = Math.random() * 360 - 180;
+      place = { name: "random", lat, lon };
+      showPlace();
+      loadWeather();
+    });
+    loadWeather();
+
+    // ---- Space station (Where the ISS at?) -----------------------------------
+
+    let issTimer = null;
+
+    async function loadISS() {
+      try {
+        const iss = await getJSON("https://api.wheretheiss.at/v1/satellites/25544");
+        $("iss-pos").textContent = `${fmtLat(iss.latitude)}, ${fmtLon(iss.longitude)}`;
+        $("iss-dist").textContent = `${fmtNum(distanceKm(DUBLIN.lat, DUBLIN.lon, iss.latitude, iss.longitude))} km`;
+        $("iss-speed").textContent = `${fmtNum(iss.velocity)} km/h`;
+        $("iss-alt").textContent = `${fmtNum(iss.altitude)} km`;
+        $("iss-light").textContent = iss.visibility === "daylight" ? "In sunlight" : "In Earth's shadow";
+        $("iss-map").href = mapLink(iss.latitude, iss.longitude, 4);
+        $("iss-status").textContent = `updated ${new Date(iss.timestamp * 1000).toLocaleTimeString("en-IE")}`;
+      } catch (e) {
+        $("iss-status").textContent = "couldn't reach the tracker, trying again…";
+      }
+    }
+
+    // Only ask for updates while the page is on screen, to be polite to the service.
+    function startISS() { if (!issTimer) { loadISS(); issTimer = setInterval(loadISS, 5000); } }
+    function stopISS() { clearInterval(issTimer); issTimer = null; }
+    document.addEventListener("visibilitychange", () => (document.hidden ? stopISS() : startISS()));
+    startISS();
+
+    // ---- Random dog (Dog CEO) ------------------------------------------------
+
+    async function loadDog() {
+      const button = $("dog-btn");
+      button.disabled = true;
+      try {
+        const data = await getJSON("https://dog.ceo/api/breeds/image/random");
+        const url = String(data.message);
+        // Only show pictures from Dog CEO's own image server.
+        if (!url.startsWith("https://images.dog.ceo/")) throw new Error("unexpected image address");
+
+        // The breed is in the address, e.g. .../breeds/hound-afghan/... → "Afghan hound".
+        const match = url.match(/\/breeds\/([^/]+)\//);
+        let breed = match ? match[1].split("-").reverse().join(" ") : "a good dog";
+        breed = breed[0].toUpperCase() + breed.slice(1);
+
+        const img = $("dog-img");
+        img.src = url;
+        await img.decode().catch(() => {});   // wait for the picture before changing the name
+        img.alt = `A random dog: ${breed}`;
+        $("dog-breed").textContent = breed;
+      } catch (e) {
+        $("dog-breed").textContent = "Couldn't fetch a dog.  Try again.";
+      }
+      button.disabled = false;
+    }
+
+    $("dog-btn").addEventListener("click", loadDog);
+    loadDog();
+  </script>
+</body>
+</html>
