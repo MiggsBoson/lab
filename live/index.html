@@ -44,6 +44,24 @@
       border-radius: 8px;
       background: var(--border);
     }
+
+    #r-form input { flex: 1; width: auto; min-width: 8rem; }
+    #r-post h3 { margin: 0 0 0.5rem; font-size: 1.05rem; line-height: 1.35; }
+    #r-post h3 a { color: inherit; }
+    .r-body { position: relative; margin: 0 0 0.5rem; }
+    .r-body img {
+      display: block;
+      width: 100%;
+      max-height: 24rem;
+      margin: 0 0 0.5rem;
+      object-fit: contain;
+      border-radius: 8px;
+      background: var(--border);
+    }
+    .r-body p { white-space: pre-line; overflow-wrap: anywhere; }
+    .r-body.covered img, .r-body.covered p { filter: blur(28px); user-select: none; }
+    .r-body.covered { overflow: hidden; min-height: 4rem; border-radius: 8px; }
+    .r-reveal { position: absolute; inset: 0; margin: auto; width: max-content; height: max-content; background: var(--card); }
   </style>
 </head>
 <body>
@@ -95,11 +113,34 @@
       </div>
     </section>
 
+    <section class="card">
+      <h2>Top of Reddit today</h2>
+      <form id="r-form" class="row">
+        <label for="r-sub">r/</label>
+        <input id="r-sub" type="text" placeholder="ireland" maxlength="24"
+               autocomplete="off" autocapitalize="none" spellcheck="false">
+        <button>Show</button>
+      </form>
+      <p id="r-status" class="muted" aria-live="polite" style="margin-top: 0.75rem;"></p>
+      <article id="r-post" hidden>
+        <p id="r-meta" class="muted"></p>
+        <h3><a id="r-title" target="_blank" rel="noopener"></a></h3>
+        <div id="r-body" class="r-body">
+          <img id="r-img" alt="Picture from the post">
+          <p id="r-text"></p>
+          <button id="r-reveal" class="secondary r-reveal" type="button"></button>
+        </div>
+        <p id="r-stats" class="muted"></p>
+      </article>
+    </section>
+
     <footer>
       Data from <a href="https://open-meteo.com/">Open-Meteo</a>,
-      <a href="https://wheretheiss.at/">Where the ISS at?</a> and
-      <a href="https://dog.ceo/dog-api/">Dog CEO</a>.  Your browser asks them directly,
-      so they see your IP address, as any website does.  Nothing else is sent.
+      <a href="https://wheretheiss.at/">Where the ISS at?</a>,
+      <a href="https://dog.ceo/dog-api/">Dog CEO</a> and
+      <a href="https://www.reddit.com/">Reddit</a>.  Your browser asks the first three directly,
+      so they see your IP address, as any website does.  Reddit is asked through the lab's own
+      small Cloudflare Worker, which gets only the subreddit name you type.
     </footer>
   </main>
 
@@ -263,6 +304,73 @@
 
     $("dog-btn").addEventListener("click", loadDog);
     loadDog();
+
+    // ---- Top of Reddit today (through the lab's Cloudflare Worker) -----------
+
+    // The Worker holds the Reddit app's secret; see worker/reddit-top.js.
+    const REDDIT_WORKER = "https://sweet-thunder-0e01.dmwyap.workers.dev";
+
+    let redditRequest = 0;
+    const redditStatus = (text) => { $("r-status").textContent = text; };
+
+    function timeAgo(seconds) {
+      const mins = Math.round((Date.now() / 1000 - seconds) / 60);
+      if (mins < 60) return `${Math.max(mins, 1)} min ago`;
+      return `${Math.round(mins / 60)} h ago`;
+    }
+
+    function showPost(sub, p) {
+      $("r-meta").textContent = `r/${sub} · u/${p.author} · ${timeAgo(p.created)}` + (p.nsfw ? " · NSFW" : "");
+      const title = $("r-title");
+      title.textContent = p.title;
+      title.href = String(p.link).startsWith("https://www.reddit.com/") ? p.link : "https://www.reddit.com/";
+
+      const img = $("r-img");
+      img.hidden = !p.image;
+      if (p.image) img.src = p.image; else img.removeAttribute("src");
+      $("r-text").hidden = !p.text;
+      $("r-text").textContent = p.text;
+
+      // NSFW and spoiler posts start blurred; one tap shows them.
+      const cover = (p.nsfw || p.spoiler) && Boolean(p.image || p.text);
+      $("r-body").classList.toggle("covered", cover);
+      $("r-reveal").hidden = !cover;
+      $("r-reveal").textContent = `${p.nsfw ? "NSFW" : "Spoiler"} · tap to show`;
+
+      const plural = (n, word) => `${fmtNum(n)} ${word}${n === 1 ? "" : "s"}`;
+      $("r-stats").textContent = `▲ ${plural(p.score, "point")} · ${plural(p.comments, "comment")}` +
+        (p.domain ? ` · links to ${p.domain}` : "");
+      $("r-post").hidden = false;
+    }
+
+    async function loadReddit(typed) {
+      const name = typed.trim().replace(/^\/?r\//i, "");
+      if (!REDDIT_WORKER) return redditStatus("Reddit isn't connected yet.");
+      if (!/^[A-Za-z0-9_]{2,21}$/.test(name)) {
+        return redditStatus("Subreddit names are 2 to 21 letters, numbers or underscores.");
+      }
+      const mine = ++redditRequest;
+      redditStatus("Loading…");
+      try {
+        const res = await fetch(`${REDDIT_WORKER}/?sub=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        if (mine !== redditRequest) return;
+        if (!res.ok || !data.post) {
+          $("r-post").hidden = true;
+          return redditStatus(data.error || `Nothing posted in r/${data.subreddit} today.`);
+        }
+        showPost(data.subreddit, data.post);
+        redditStatus("");
+      } catch (e) {
+        if (mine === redditRequest) redditStatus("Couldn't reach Reddit.  Try again in a minute.");
+      }
+    }
+
+    $("r-form").addEventListener("submit", (e) => { e.preventDefault(); loadReddit($("r-sub").value); });
+    $("r-reveal").addEventListener("click", () => {
+      $("r-body").classList.remove("covered");
+      $("r-reveal").hidden = true;
+    });
   </script>
 </body>
 </html>
