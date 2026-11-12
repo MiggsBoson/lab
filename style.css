@@ -6,6 +6,7 @@
   --border: #e4e4de;
   --accent: #2f6fdb;
   --accent-fg: #ffffff;
+  --live: #2e9e5b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -17,6 +18,7 @@
     --border: #33332f;
     --accent: #7aa7ff;
     --accent-fg: #0d1b33;
+    --live: #4cc27c;
   }
 }
 
@@ -103,3 +105,62 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .row + .row, input + .row { margin-top: 0.75rem; }
 .muted { color: var(--muted); font-size: 0.95rem; }
 .big { min-width: 3ch; font-size: 2rem; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* The live bar added by together.js: who's here, and emoji reactions */
+
+.has-together { padding-bottom: 4.5rem; }
+
+.together {
+  position: fixed;
+  left: 50%;
+  bottom: 0.75rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.25rem 0.35rem 0.25rem 0.85rem;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  font-size: 0.9rem;
+}
+.together-count { color: var(--muted); white-space: nowrap; }
+.together-count.live::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: var(--live);
+}
+.together-emojis { display: flex; }
+.together-emojis button {
+  padding: 0.3rem 0.35rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.together-emojis button:hover { background: var(--bg); filter: none; }
+
+.together-float {
+  position: fixed;
+  bottom: 4rem;
+  z-index: 11;
+  font-size: 2rem;
+  pointer-events: none;
+  animation: together-up 2.5s ease-out forwards;
+}
+@keyframes together-up {
+  from { transform: translateY(0) scale(0.8); opacity: 1; }
+  to { transform: translateY(-60vh) scale(1.4); opacity: 0; }
+}
+@keyframes together-fade { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .together-float { animation: together-fade 1.5s forwards; }
+}

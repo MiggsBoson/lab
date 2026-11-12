@@ -7,9 +7,6 @@
   <link rel="stylesheet" href="../style.css">
   <style>
     /* Styles only this page needs. */
-    :root { --live: #2e9e5b; }
-    @media (prefers-color-scheme: dark) { :root { --live: #4cc27c; } }
-
     .now { display: flex; align-items: center; gap: 0.75rem; margin: 0.25rem 0 0.75rem; }
     .now .icon { font-size: 3rem; line-height: 1; }
     .now .big { min-width: 0; text-align: left; }
@@ -372,5 +369,6 @@
       $("r-reveal").hidden = true;
     });
   </script>
+  <script type="module" src="../together.js"></script>
 </body>
 </html>

@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    /* Styles only this page needs. */
+    .status { margin: 0 0 0.25rem; font-weight: 600; }
+    .seats { margin: 0 0 0.75rem; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      width: min(100%, 30rem);
+      aspect-ratio: 1;
+      margin: 0 0 0.75rem;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      user-select: none;
+    }
+    .sq {
+      position: relative;
+      display: grid;
+      place-items: center;
+      aspect-ratio: 1;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      color: inherit;
+      font-size: min(9vw, 2.9rem);
+      line-height: 1;
+      cursor: default;
+    }
+    .sq:hover { filter: none; }
+    .sq:active { transform: none; }
+    .sq:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+    .sq.light { background-color: #eed9b6; }
+    .sq.dark { background-color: #b58863; }
+    .sq.can { cursor: pointer; }
+    .sq.last { background-image: linear-gradient(rgb(255 214 0 / 0.38), rgb(255 214 0 / 0.38)); }
+    .sq.sel { background-image: linear-gradient(rgb(20 110 40 / 0.5), rgb(20 110 40 / 0.5)); }
+    .sq.check { background-image: radial-gradient(rgb(230 0 0 / 0.85), rgb(230 0 0 / 0) 70%); }
+    .sq.target::after {
+      content: "";
+      position: absolute;
+      width: 30%;
+      height: 30%;
+      border-radius: 50%;
+      background: rgb(20 110 40 / 0.5);
+    }
+    .sq.target.capture::after {
+      width: 86%;
+      height: 86%;
+      background: none;
+      border: 0.3rem solid rgb(20 110 40 / 0.5);
+    }
+    .coord {
+      position: absolute;
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: rgb(0 0 0 / 0.45);
+    }
+    .coord.file { right: 0.15rem; bottom: 0.1rem; }
+    .coord.rank { left: 0.15rem; top: 0.1rem; }
+
+    /* Both colours use the solid symbols; white ones are filled white with a dark edge. */
+    .piece-w { color: #fff; text-shadow: 0 0 1px #000, 0 0 2px #000, 0 1px 1px #000; }
+    .piece-b { color: #151515; text-shadow: 0 0 1px rgb(255 255 255 / 0.35); }
+    .promo button { font-size: 1.8rem; line-height: 1; padding: 0.3rem 0.6rem; }
+    #notice:empty { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Chess</h1>
+    <p class="lede">One board for everyone.  Make the first move to play white; the next person to move plays black.  Everyone else watches live.</p>
+
+    <p id="status" class="status" aria-live="polite">Connecting…</p>
+    <p id="seats" class="seats muted"></p>
+    <div id="board" class="board" aria-label="Chess board"></div>
+
+    <div id="promo" class="promo row" hidden>
+      <span>Promote to:</span>
+    </div>
+    <p id="notice" class="muted" aria-live="polite"></p>
+    <div class="row">
+      <button id="resign" class="secondary" hidden>Resign</button>
+      <button id="newgame" hidden>New game</button>
+    </div>
+
+    <h2 style="font-size: 1.1rem; margin: 1.5rem 0 0.25rem;">Moves</h2>
+    <p id="moves" class="muted">No moves yet.</p>
+  </main>
+
+  <script type="module">
+    // chess.js knows the rules (legal moves, check, mate).  The server uses the
+    // same library and has the final say, so nobody can cheat from the browser.
+    import { Chess } from "./chess.js";
+    import { on, send } from "../together.js";
+
+    const $ = (id) => document.getElementById(id);
+    const FILES = "abcdefgh";
+    const SYMBOL = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
+    const NAME = { k: "king", q: "queen", r: "rook", b: "bishop", n: "knight", p: "pawn" };
+    const glyph = (type) => SYMBOL[type] + "︎";   // ︎: show as a symbol, not an emoji
+
+    let state = null;        // the last position the server sent
+    let game = new Chess();  // that position, with chess.js rules attached
+    let selected = null;     // the square of the piece picked up, e.g. "e2"
+    let noticeTimer = null;
+
+    // ---- Who may move? ---------------------------------------------------------
+
+    function seatOf(colour) {
+      return colour === "w" ? state.white : state.black;
+    }
+
+    // True if this visitor may move the side whose turn it is: it's their side,
+    // or the side is free and they aren't already playing the other one.
+    function canMove() {
+      if (!state || state.result) return false;
+      const seat = seatOf(game.turn());
+      return seat === "you" || (seat === "open" && state.you === null);
+    }
+
+    // ---- Drawing -----------------------------------------------------------------
+
+    function kingInCheck() {
+      if (!game.inCheck()) return null;
+      for (const row of game.board()) {
+        for (const p of row) if (p && p.type === "k" && p.color === game.turn()) return p.square;
+      }
+      return null;
+    }
+
+    function drawBoard() {
+      const flip = state?.you === "b";   // black sees the board from their side
+      const targets = selected ? game.moves({ square: selected, verbose: true }) : [];
+      const check = kingInCheck();
+      const mine = canMove();
+      const board = $("board");
+      board.replaceChildren();
+
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const file = flip ? 7 - col : col;
+          const rank = flip ? row + 1 : 8 - row;
+          const sq = FILES[file] + rank;
+          const piece = game.get(sq) || null;
+          const target = targets.find((m) => m.to === sq);
+
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "sq " + ((file + rank) % 2 === 1 ? "dark" : "light");
+          if (state?.last && (state.last.from === sq || state.last.to === sq)) b.classList.add("last");
+          if (sq === selected) b.classList.add("sel");
+          if (sq === check) b.classList.add("check");
+          if (target) b.classList.add("target", ...(target.captured ? ["capture"] : []));
+          if (mine && (target || (piece && piece.color === game.turn()))) b.classList.add("can");
+
+          if (piece) {
+            const span = document.createElement("span");
+            span.className = `piece-${piece.color}`;
+            span.textContent = glyph(piece.type);
+            b.append(span);
+          }
+          b.setAttribute("aria-label",
+            sq + (piece ? `, ${piece.color === "w" ? "white" : "black"} ${NAME[piece.type]}` : ""));
+
+          // Little coordinates along the bottom and left edges.
+          if (row === 7) addCoord(b, "file", FILES[file]);
+          if (col === 0) addCoord(b, "rank", rank);
+
+          b.addEventListener("click", () => clickSquare(sq));
+          board.append(b);
+        }
+      }
+    }
+
+    function addCoord(square, kind, text) {
+      const span = document.createElement("span");
+      span.className = `coord ${kind}`;
+      span.textContent = text;
+      span.setAttribute("aria-hidden", "true");
+      square.append(span);
+    }
+
+    function describe() {
+      if (!state) return "Connecting…";
+      if (state.result) {
+        const who = { "1-0": "White wins", "0-1": "Black wins" }[state.result] || "Draw";
+        return `${who} (${state.reason}).`;
+      }
+      const colour = game.turn() === "w" ? "white" : "black";
+      const Colour = colour[0].toUpperCase() + colour.slice(1);
+      const check = game.inCheck() ? "  Check!" : "";
+      const seat = seatOf(game.turn());
+      if (seat === "you") return `Your move (${colour}).${check}`;
+      if (seat === "open" && state.you === null) {
+        return `${Colour} to move, and the seat is free: make a move to play ${colour}.${check}`;
+      }
+      if (seat === "open") return `Waiting for someone to play ${colour}.  Share the link!`;
+      return `${Colour} to move.${check}` + (state.you ? "  Waiting for your opponent." : "  You're watching.");
+    }
+
+    function draw() {
+      $("status").textContent = describe();
+      if (state) {
+        const words = { you: "you", taken: "taken", open: "free seat" };
+        $("seats").textContent = `White: ${words[state.white]} · Black: ${words[state.black]}`;
+        $("resign").hidden = !state.you || Boolean(state.result);
+        $("newgame").hidden = !state.canRestart;
+        $("moves").textContent = state.sans.length
+          ? state.sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(" ")
+          : "No moves yet.";
+      }
+      drawBoard();
+    }
+
+    function notice(text) {
+      $("notice").textContent = text;
+      clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => { $("notice").textContent = ""; }, 5000);
+    }
+
+    // ---- Playing -----------------------------------------------------------------
+
+    function clickSquare(sq) {
+      $("promo").hidden = true;
+      if (!canMove()) {
+        if (state && !state.result && state.you && seatOf(game.turn()) !== "you") notice("It's not your turn.");
+        else if (state && !state.result && !state.you) notice("Both sides are taken.  You're watching.");
+        return;
+      }
+      if (selected) {
+        const move = game.moves({ square: selected, verbose: true }).find((m) => m.to === sq);
+        if (move) {
+          if (move.promotion) return askPromotion(selected, sq);
+          return play(selected, sq);
+        }
+      }
+      const piece = game.get(sq);
+      selected = piece && piece.color === game.turn() && sq !== selected ? sq : null;
+      drawBoard();
+    }
+
+    // Show the move straight away; the server's answer then confirms or undoes it.
+    function play(from, to, promotion) {
+      selected = null;
+      if (!send({ type: "move", from, to, promotion })) {
+        notice("Not connected.  Try again in a moment.");
+        return drawBoard();
+      }
+      try { game.move({ from, to, promotion }); } catch {}
+      state = { ...state, last: { from, to } };
+      draw();
+    }
+
+    function askPromotion(from, to) {
+      const box = $("promo");
+      box.querySelectorAll("button").forEach((b) => b.remove());
+      for (const type of ["q", "r", "b", "n"]) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "secondary";
+        b.innerHTML = `<span class="piece-${game.turn()}"></span>`;
+        b.firstChild.textContent = glyph(type);
+        b.setAttribute("aria-label", NAME[type]);
+        b.addEventListener("click", () => { box.hidden = true; play(from, to, type); });
+        box.append(b);
+      }
+      box.hidden = false;
+    }
+
+    $("resign").addEventListener("click", () => {
+      if (confirm("Resign this game?")) send({ type: "resign" });
+    });
+    $("newgame").addEventListener("click", () => send({ type: "newgame" }));
+
+    // ---- Messages from the server ------------------------------------------------
+
+    on("chess", (msg) => {
+      state = msg;
+      game = new Chess(msg.fen);
+      selected = null;
+      draw();
+    });
+    on("notice", (msg) => { if (msg.about === "chess") notice(msg.text); });
+    on("closed", () => { $("status").textContent = "Reconnecting…"; });
+
+    draw();
+  </script>
+</body>
+</html>

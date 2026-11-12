@@ -1,0 +1,20 @@
+# The lab's live server: one Cloudflare Worker plus one Durable Object.
+# Deploy from this folder with:  npx wrangler deploy
+# Run it on this computer with:  npx wrangler dev   (then open the site on localhost:8000)
+
+name = "lab-live"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# The "lobby": one object that holds the chess game and the shout box, and
+# knows every open page.  Durable Objects handle one message at a time.
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby"]   # SQLite-backed objects are the ones on the free plan
+
+[observability]
+enabled = true                   # logs show in the Cloudflare dashboard

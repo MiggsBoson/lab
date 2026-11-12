@@ -3,3 +3,7 @@
 
 # Private handover notes; stay on this machine only.
 CLAUDE.md
+
+# Server tools: installed packages and Wrangler's local files.
+node_modules/
+.wrangler/

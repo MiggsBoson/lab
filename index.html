@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The lab</title>
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Styles only this page needs. */
+    .shoutbox { margin-top: 2rem; }
+    #shout-form input { flex: 1 1 8rem; width: auto; }
+    #shout-form #shout-text { flex: 3 1 12rem; }
+    #shout-notice:empty { display: none; }
+    .shouts { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
+    .shouts li { overflow-wrap: anywhere; }
+    .shouts .who { font-size: 0.9rem; }
+    .linkish {
+      margin-left: 0.4rem;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-decoration: underline;
+    }
+    .linkish:hover { color: var(--fg); filter: none; }
+  </style>
 </head>
 <body>
   <main>
@@ -14,9 +34,15 @@
     <ul class="experiments">
       <!-- One entry per experiment folder. -->
       <li>
-        <a href="hello/">
-          <strong>Hello</strong>
-          <span>The first experiment: proof that the lab works.</span>
+        <a href="chess/">
+          <strong>Chess</strong>
+          <span>One board for everyone.  Make the first move to play white; the next person plays black.</span>
+        </a>
+      </li>
+      <li>
+        <a href="live/">
+          <strong>Live data</strong>
+          <span>Weather, the space station right now, a random dog and Reddit's top post of the day.</span>
         </a>
       </li>
       <li>
@@ -26,14 +52,108 @@
         </a>
       </li>
       <li>
-        <a href="live/">
-          <strong>Live data</strong>
-          <span>Weather, the space station right now, a random dog and Reddit's top post of the day.</span>
+        <a href="hello/">
+          <strong>Hello</strong>
+          <span>The first experiment: proof that the lab works.</span>
         </a>
       </li>
     </ul>
 
+    <section class="card shoutbox" aria-labelledby="shout-heading">
+      <h2 id="shout-heading">Shout box</h2>
+      <p class="muted">Say hi to whoever's around.  Anyone can read it, so be nice.</p>
+      <form id="shout-form" class="row">
+        <input id="shout-name" type="text" placeholder="Name (optional)" maxlength="20"
+               aria-label="Your name (optional)" autocomplete="nickname">
+        <input id="shout-text" type="text" placeholder="Say something" maxlength="200"
+               aria-label="Message" autocomplete="off" required>
+        <button>Send</button>
+      </form>
+      <p id="shout-notice" class="muted" aria-live="polite" style="margin-top: 0.75rem;"></p>
+      <ol id="shouts" class="shouts"></ol>
+    </section>
+
     <footer>Ideas or bugs? Message Martin, or open an issue on GitHub.</footer>
   </main>
+
+  <script type="module">
+    // together.js keeps the live connection and adds the "here now" bar.
+    import { on, send } from "./together.js";
+
+    const $ = (id) => document.getElementById(id);
+    let shouts = [];
+
+    // Remember the name in this browser, as a convenience.
+    try { $("shout-name").value = localStorage.getItem("lab-shout-name") || ""; } catch {}
+
+    function timeAgo(ms) {
+      const mins = Math.floor((Date.now() - ms) / 60000);
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins} min ago`;
+      if (mins < 48 * 60) return `${Math.floor(mins / 60)} h ago`;
+      return `${Math.floor(mins / 1440)} days ago`;
+    }
+
+    // Draw the list, newest first.  Everything people typed goes in as plain text.
+    function render() {
+      const list = $("shouts");
+      list.replaceChildren();
+      if (shouts.length === 0) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "No shouts yet.  Be the first.";
+        list.append(li);
+        return;
+      }
+      for (const s of [...shouts].reverse()) {
+        const li = document.createElement("li");
+        const who = document.createElement("div");
+        who.className = "who";
+        const name = document.createElement("strong");
+        name.textContent = s.name;
+        const when = document.createElement("span");
+        when.className = "muted";
+        when.textContent = ` · ${timeAgo(s.at)}`;
+        const action = document.createElement("button");
+        action.type = "button";
+        action.className = "linkish";
+        if (s.mine) {
+          action.textContent = "delete";
+          action.addEventListener("click", () => send({ type: "unshout", id: s.id }));
+        } else {
+          action.textContent = "report";
+          action.addEventListener("click", () => {
+            if (!confirm("Report this message?  Two reports hide it.")) return;
+            send({ type: "report", id: s.id });
+            action.textContent = "reported";
+            action.disabled = true;
+          });
+        }
+        who.append(name, when, action);
+        const text = document.createElement("div");
+        text.textContent = s.text;
+        li.append(who, text);
+        list.append(li);
+      }
+    }
+
+    on("shouts", (msg) => { shouts = msg.shouts; render(); });
+    on("notice", (msg) => { if (msg.about === "shout") $("shout-notice").textContent = msg.text; });
+    setInterval(render, 30_000);   // keep "5 min ago" up to date
+
+    $("shout-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = $("shout-name").value.trim();
+      const text = $("shout-text").value.trim();
+      if (!text) return;
+      try { localStorage.setItem("lab-shout-name", name); } catch {}
+      if (send({ type: "shout", name, text })) {
+        $("shout-text").value = "";
+        $("shout-notice").textContent = "";
+      } else {
+        $("shout-notice").textContent = "Not connected yet.  Try again in a moment.";
+      }
+    });
+  </script>
 </body>
 </html>
