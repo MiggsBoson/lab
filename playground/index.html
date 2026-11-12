@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Playground · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Playground</h1>
+    <p class="lede">Buttons and other bits to poke at.  Each box is a small pattern you can copy into a real experiment.</p>
+
+    <section class="card">
+      <h2>Counter</h2>
+      <p class="muted">Buttons that change a number.  It stays the same when you reload.</p>
+      <div class="row">
+        <button id="minus" class="secondary" aria-label="Minus one">−</button>
+        <span id="counter" class="big">0</span>
+        <button id="plus" aria-label="Plus one">+</button>
+        <button id="reset" class="secondary">Reset</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Say hello</h2>
+      <p class="muted">Text that changes as you type.</p>
+      <input id="name" type="text" placeholder="Your name" aria-label="Your name" autocomplete="given-name">
+      <p id="greeting" class="big" style="text-align: left; margin-top: 0.75rem;">Hello, stranger.</p>
+    </section>
+
+    <section class="card">
+      <h2>Who's buying?</h2>
+      <p class="muted">Type some names with commas between them, then let the button pick one.</p>
+      <input id="names" type="text" placeholder="Aoife, Cian, Niamh" aria-label="Names, separated by commas">
+      <div class="row">
+        <button id="pick">Pick someone</button>
+        <strong id="picked" aria-live="polite"></strong>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Quick poll</h2>
+      <p class="muted">What should the lab build first?  Your vote is saved on this device only, so copy it and paste it into Messenger.</p>
+      <div class="row" id="poll" role="group" aria-label="Poll options">
+        <button class="secondary" data-choice="Predictions league" aria-pressed="false">Predictions league</button>
+        <button class="secondary" data-choice="Daily quiz" aria-pressed="false">Daily quiz</button>
+        <button class="secondary" data-choice="Something else" aria-pressed="false">Something else</button>
+      </div>
+      <div class="row">
+        <button id="copy" disabled>Copy my vote</button>
+        <span id="copied" class="muted" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ---- Helpers -------------------------------------------------------------
+
+    // Find an element by its id="..." in the HTML above.
+    const $ = (id) => document.getElementById(id);
+
+    // Save and load values in this browser (localStorage).  Nothing leaves the
+    // device; shared data comes later with Supabase.  try/catch because some
+    // browsers block storage, e.g. in private windows.
+    function load(key, fallback) {
+      try {
+        const saved = localStorage.getItem(key);
+        return saved === null ? fallback : JSON.parse(saved);
+      } catch (e) {
+        return fallback;
+      }
+    }
+    function save(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+
+    // ---- 1. Counter: several buttons changing one value ----------------------
+
+    let count = load("playground-count", 0);
+
+    function showCount() {
+      $("counter").textContent = count;
+      save("playground-count", count);
+    }
+
+    $("plus").addEventListener("click", () => { count += 1; showCount(); });
+    $("minus").addEventListener("click", () => { count -= 1; showCount(); });
+    $("reset").addEventListener("click", () => { count = 0; showCount(); });
+    showCount();
+
+    // ---- 2. Say hello: the "input" event fires on every keystroke ------------
+
+    const nameBox = $("name");
+    nameBox.value = load("playground-name", "");
+
+    function greet() {
+      const name = nameBox.value.trim();
+      // textContent (not innerHTML) so whatever people type is shown as plain text.
+      $("greeting").textContent = name ? `Hello, ${name}!` : "Hello, stranger.";
+      save("playground-name", nameBox.value);
+    }
+
+    nameBox.addEventListener("input", greet);
+    greet();
+
+    // ---- 3. Who's buying: split text into a list, pick one at random ---------
+
+    const namesBox = $("names");
+    namesBox.value = load("playground-names", "");
+    namesBox.addEventListener("input", () => save("playground-names", namesBox.value));
+
+    $("pick").addEventListener("click", () => {
+      const names = namesBox.value.split(",").map((n) => n.trim()).filter((n) => n);
+      const out = $("picked");
+      const button = $("pick");
+
+      if (names.length === 0) {
+        out.textContent = "Add some names first.";
+        return;
+      }
+
+      // Flick through random names for a moment, then stop on one.
+      button.disabled = true;
+      out.setAttribute("aria-busy", "true");   // screen readers wait for the final name
+      let flips = 0;
+      const timer = setInterval(() => {
+        out.textContent = names[Math.floor(Math.random() * names.length)];
+        flips += 1;
+        if (flips === 12) {
+          clearInterval(timer);
+          out.textContent += " 🎉";
+          out.setAttribute("aria-busy", "false");
+          button.disabled = false;
+        }
+      }, 70);
+    });
+
+    // ---- 4. Quick poll: one handler for several buttons, plus copy-to-share --
+
+    let vote = load("playground-vote", null);
+    const pollButtons = document.querySelectorAll("#poll button");
+
+    function showVote() {
+      // data-choice="..." in the HTML says which option each button is.
+      pollButtons.forEach((b) => b.setAttribute("aria-pressed", b.dataset.choice === vote));
+      $("copy").disabled = !vote;
+    }
+
+    pollButtons.forEach((b) => {
+      b.addEventListener("click", () => {
+        vote = b.dataset.choice;
+        save("playground-vote", vote);
+        $("copied").textContent = "";
+        showVote();
+      });
+    });
+
+    $("copy").addEventListener("click", async () => {
+      const text = `My vote for the lab's first experiment: ${vote}.  Vote here: ${location.href}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        $("copied").textContent = "Copied.  Paste it into Messenger.";
+      } catch (e) {
+        // Some browsers refuse clipboard access; show the text so it can be copied by hand.
+        $("copied").textContent = text;
+      }
+    });
+
+    showVote();
+  </script>
+</body>
+</html>

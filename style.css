@@ -5,6 +5,7 @@
   --card: #ffffff;
   --border: #e4e4de;
   --accent: #2f6fdb;
+  --accent-fg: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -15,6 +16,7 @@
     --card: #1f1f1d;
     --border: #33332f;
     --accent: #7aa7ff;
+    --accent-fg: #0d1b33;
   }
 }
 
@@ -55,3 +57,48 @@ a { color: var(--accent); }
 .experiments span { color: var(--muted); font-size: 0.95rem; }
 
 footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+
+/* Controls shared by all experiments */
+
+button {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.08); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.5; cursor: not-allowed; filter: none; transform: none; }
+button.secondary { background: transparent; color: var(--accent); }
+button.secondary[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+
+input[type="text"] {
+  font: inherit;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.card {
+  margin: 0 0 1rem;
+  padding: 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.card h2 { margin: 0 0 0.25rem; font-size: 1.1rem; }
+.card p { margin: 0 0 0.75rem; }
+.card p:last-child { margin-bottom: 0; }
+
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.row + .row, input + .row { margin-top: 0.75rem; }
+.muted { color: var(--muted); font-size: 0.95rem; }
+.big { min-width: 3ch; font-size: 2rem; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
