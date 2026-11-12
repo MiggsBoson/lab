@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Admin · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    /* Styles only this page needs. */
+    #unlock input { flex: 1 1 14rem; width: auto; }
+    #reply:empty { display: none; }
+    .counts { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    .counts th, .counts td { padding: 0.25rem 0.4rem; border-bottom: 1px solid var(--border); text-align: left; }
+    .items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+    .items li { overflow-wrap: anywhere; }
+    .items .muted { font-size: 0.85rem; }
+    .items button { padding: 0.15rem 0.6rem; font-size: 0.85rem; }
+    .danger { background: #b3261e; border-color: #b3261e; color: #fff; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Admin</h1>
+    <p class="lede">Martin's controls.  Nothing here works without the admin key.</p>
+
+    <section class="card">
+      <form id="unlock" class="row">
+        <input id="key" type="password" placeholder="Admin key" aria-label="Admin key" autocomplete="current-password">
+        <button>Unlock</button>
+      </form>
+      <label class="row muted"><input id="remember" type="checkbox"> Remember the key on this device</label>
+      <p id="reply" class="muted" aria-live="polite" style="margin-top: 0.75rem;"></p>
+    </section>
+
+    <div id="panel" hidden>
+      <section class="card">
+        <h2>Reset the mess</h2>
+        <div class="row">
+          <label for="page">Page</label>
+          <select id="page">
+            <option value="all">Every page</option>
+            <option value="home">home</option>
+            <option value="chess">chess</option>
+            <option value="live">live</option>
+            <option value="playground">playground</option>
+            <option value="hello">hello</option>
+          </select>
+        </div>
+        <div class="row">
+          <button data-action="reset-stickers" class="secondary">Stickers</button>
+          <button data-action="reset-paint" class="secondary">Paint</button>
+          <button data-action="reset-wear" class="secondary">Wear</button>
+          <button data-action="reset-chaos" class="danger">All of it</button>
+        </div>
+        <div class="row">
+          <button data-action="reset-colours" class="secondary" data-nopage>Site colours</button>
+          <button data-action="reset-chess" class="secondary" data-nopage>Chess game</button>
+        </div>
+        <table class="counts" style="margin-top: 1rem;">
+          <thead><tr><th>Page</th><th>Stickers</th><th>Paint</th><th>Wear spots</th></tr></thead>
+          <tbody id="counts"></tbody>
+        </table>
+        <p id="summary" class="muted"></p>
+      </section>
+
+      <section class="card">
+        <h2>Suggestions</h2>
+        <ol id="suggestions" class="items"></ol>
+      </section>
+
+      <section class="card">
+        <h2>Shouts</h2>
+        <ol id="shouts" class="items"></ol>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+
+    const $ = (id) => document.getElementById(id);
+    let key = "";
+    try { key = localStorage.getItem("lab-admin-key") || ""; } catch {}
+    $("key").value = key;
+    $("remember").checked = Boolean(key);
+
+    function admin(action, extra = {}) {
+      if (!send({ type: "admin", key, action, ...extra })) $("reply").textContent = "Not connected yet.";
+    }
+
+    $("unlock").addEventListener("submit", (e) => {
+      e.preventDefault();
+      key = $("key").value;
+      try {
+        if ($("remember").checked) localStorage.setItem("lab-admin-key", key);
+        else localStorage.removeItem("lab-admin-key");
+      } catch {}
+      admin("check");
+    });
+
+    document.querySelectorAll("[data-action]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const page = b.hasAttribute("data-nopage") ? undefined : $("page").value;
+        const where = page === "all" ? "every page" : page;
+        if (!confirm(`${b.textContent}: reset${where ? ` on ${where}` : ""}?  This can't be undone.`)) return;
+        admin(b.dataset.action, { page });
+      });
+    });
+
+    const when = (ms) => new Date(ms).toLocaleString("en-IE", { dateStyle: "short", timeStyle: "short" });
+
+    function button(label, onClick, danger) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.className = danger ? "danger" : "secondary";
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    function show(data) {
+      $("panel").hidden = false;
+      $("counts").replaceChildren(...Object.entries(data.pages).map(([page, c]) => {
+        const tr = document.createElement("tr");
+        for (const v of [page, c.stickers, c.strokes, c.wearCells]) {
+          const td = document.createElement("td");
+          td.textContent = v;
+          tr.append(td);
+        }
+        return tr;
+      }));
+      $("summary").textContent = `Site colour hue ${data.hue} · ${data.total} clicks recorded (the site's age).`;
+
+      $("suggestions").replaceChildren(...data.suggestions.map((s) => {
+        const li = document.createElement("li");
+        const text = document.createElement("div");
+        text.textContent = s.text;
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        meta.textContent = `${when(s.at)} · ${s.votes} votes · ${s.reports} reports${s.reports >= 2 ? " (hidden)" : ""}${s.done ? " · done" : ""}`;
+        const row = document.createElement("div");
+        row.className = "row";
+        row.style.marginTop = "0.25rem";
+        row.append(button(s.done ? "Not done" : "Mark done", () => admin("done-suggestion", { id: s.id })));
+        if (s.reports >= 2) row.append(button("Unhide", () => admin("unhide-suggestion", { id: s.id })));
+        row.append(button("Delete", () => { if (confirm("Delete this suggestion?")) admin("delete-suggestion", { id: s.id }); }, true));
+        li.append(text, meta, row);
+        return li;
+      }));
+      if (!data.suggestions.length) $("suggestions").textContent = "None yet.";
+
+      $("shouts").replaceChildren(...[...data.shouts].reverse().map((s) => {
+        const li = document.createElement("li");
+        const text = document.createElement("div");
+        text.textContent = `${s.name}: ${s.text}`;
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        meta.textContent = `${when(s.at)} · ${s.reports} reports${s.reports >= 2 ? " (hidden)" : ""}`;
+        const row = document.createElement("div");
+        row.className = "row";
+        row.style.marginTop = "0.25rem";
+        if (s.reports >= 2) row.append(button("Unhide", () => admin("unhide-shout", { id: s.id })));
+        row.append(button("Delete", () => { if (confirm("Delete this shout?")) admin("delete-shout", { id: s.id }); }, true));
+        li.append(text, meta, row);
+        return li;
+      }));
+      if (!data.shouts.length) $("shouts").textContent = "None yet.";
+    }
+
+    on("admin-reply", (msg) => {
+      $("reply").textContent = msg.ok ? (msg.text === "Done." ? "Unlocked." : msg.text) : msg.text;
+      if (msg.ok && msg.data) show(msg.data);
+      if (!msg.ok && msg.text === "Wrong key.") $("panel").hidden = true;
+    });
+
+    // Unlock straight away if the key is remembered.
+    on("open", () => { if (key) admin("check"); });
+  </script>
+</body>
+</html>

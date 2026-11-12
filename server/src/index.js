@@ -1,10 +1,13 @@
 // lab-live: the lab's shared, live server (a Cloudflare Worker plus one Durable Object).
 //
 // Every page opens one WebSocket to  /ws .  Over it, visitors see each other:
-//   presence    how many people are on the site right now
-//   reactions   tap an emoji and it floats up on everyone's screen
-//   shout box   short public messages (authors can delete; 2 reports hide one)
-//   chess       one shared board: the first mover plays white, the next mover black
+//   presence     how many people are on the site right now
+//   reactions    tap an emoji and it floats up on everyone's screen
+//   shout box    short public messages (authors can delete; 2 reports hide one)
+//   chess        one shared board: the first mover plays white, the next mover black
+//   chaos        stickers, spray paint, wear and tear, and the site's shared colours
+//   suggestions  ideas for the lab, with one vote per visitor
+//   admin        Martin's reset and delete controls, locked by the ADMIN_KEY secret
 //
 // Everything lives in one Durable Object, "the lobby".  It handles one message at
 // a time, so two people can never grab the same chess side at the same moment.
@@ -12,11 +15,16 @@
 // Each browser makes up a random visitor id and keeps it (localStorage).  The id is
 // how the server knows "this is the person playing white".  Ids are never sent to
 // other visitors.
+//
+// Positions on a page are in "units": 1000 units = the width of the page's main
+// column, measured from its top-left corner.  So a sticker stays next to the same
+// thing whether the page is open on a phone or a wide screen.
 
 import { DurableObject } from "cloudflare:workers";
 import { Chess } from "chess.js";
 
 const ALLOWED_ORIGINS = ["https://miggsboson.github.io", "http://localhost:8000", "http://127.0.0.1:8000"];
+const MESSAGE_MAX = 4000;               // characters per incoming message
 const EMOJIS = ["👋", "😂", "❤️", "🔥", "🎉", "😮"];
 const SHOUTS_KEPT = 50;
 const SHOUT_MAX = 200;                  // characters
@@ -25,6 +33,33 @@ const SHOUT_GAP_MS = 10_000;            // one shout per 10 seconds per visitor
 const REACT_GAP_MS = 250;               // a few reactions a second per visitor
 const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
+
+// Chaos
+const PAGES = ["home", "chess", "live", "playground", "hello"];
+const STICKERS = [
+  "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
+  "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
+  "circle", "square", "rect", "triangle", "tape",
+];
+const PAINT = ["#e63946", "#f4a261", "#2a9d8f", "#3a86ff", "#8338ec", "#111111", "#ffffff"];
+const STICKERS_PER_PAGE = 150;          // past this, the oldest peel off
+const STICKER_GAP_MS = 1500;
+const STROKES_PER_PAGE = 150;
+const STROKE_POINTS = 80;
+const PAINT_LIFE_MS = 3 * 24 * 3600 * 1000;   // paint fades away over three days
+const INK_MAX = 6000;                   // in units of line length; refills over time
+const INK_PER_SEC = 60;
+const SCRUB_GAP_MS = 200;
+const WEAR_CELL = 25;                   // wear is counted on a grid of 25-unit squares
+const WEAR_CELLS_MAX = 3000;
+const WEAR_KEYS_MAX = 300;
+const WEAR_GAP_MS = 4000;
+const REPAINT_GAP_MS = 4000;
+
+// Suggestions
+const SUGGESTIONS_KEPT = 100;
+const SUGGESTION_MAX = 140;
+const SUGGEST_GAP_MS = 60_000;
 
 // ---- The Worker: checks the request, then hands it to the lobby --------------
 
@@ -49,10 +84,32 @@ export class Lobby extends DurableObject {
     // Load saved state before handling any message.  This also runs when the
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
-      this.shouts = (await ctx.storage.get("shouts")) || [];
-      this.nextShoutId = (await ctx.storage.get("nextShoutId")) || 1;
-      this.game = (await ctx.storage.get("game")) || freshGame();
+      const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId"];
+      for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
+      const saved = await ctx.storage.get(keys);
+
+      this.shouts = saved.get("shouts") || [];
+      this.nextShoutId = saved.get("nextShoutId") || 1;
+      this.game = saved.get("game") || freshGame();
       this.chess = replay(this.game.moves);
+
+      this.palette = saved.get("palette") || { hue: 218, at: 0 };
+      this.total = saved.get("total") || 0;        // every click ever: the site's age
+      this.suggestions = saved.get("suggestions") || [];
+      this.nextId = saved.get("nextId") || 1;
+
+      this.pages = {};
+      for (const p of PAGES) {
+        this.pages[p] = {
+          stickers: saved.get(`stickers:${p}`) || [],
+          strokes: new Map(),                        // each stroke is saved under its own key
+          wear: saved.get(`wear:${p}`) || freshWear(),
+        };
+      }
+      for (const [key, stroke] of await ctx.storage.list({ prefix: "stroke:" })) {
+        const page = key.split(":")[1];
+        if (this.pages[page]) this.pages[page].strokes.set(stroke.id, stroke);
+      }
     });
   }
 
@@ -61,25 +118,18 @@ export class Lobby extends DurableObject {
   async fetch() {
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ id: null, lastShout: 0, lastReact: 0 });
+    server.serializeAttachment({ id: null, page: null, lastShout: 0, lastReact: 0 });
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async webSocketMessage(ws, raw) {
-    if (typeof raw !== "string" || raw.length > 2000) return;
+    if (typeof raw !== "string" || raw.length > MESSAGE_MAX) return;
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    if (!msg || typeof msg !== "object") return;
     const me = ws.deserializeAttachment();
 
-    if (msg.type === "hello") {
-      if (me.id || !/^[0-9a-f-]{36}$/.test(msg.id)) return;
-      me.id = msg.id;
-      ws.serializeAttachment(me);
-      this.send(ws, { type: "shouts", shouts: this.publicShouts(me.id) });
-      this.send(ws, this.chessState(me.id));
-      this.broadcastPresence();
-      return;
-    }
+    if (msg.type === "hello") return this.hello(ws, me, msg);
     if (!me.id) return;   // say hello first
 
     switch (msg.type) {
@@ -90,6 +140,16 @@ export class Lobby extends DurableObject {
       case "move": return this.move(ws, me, msg);
       case "resign": return this.resign(ws, me);
       case "newgame": return this.restart(ws);
+      case "sticker": return this.sticker(ws, me, msg);
+      case "stroke": return this.stroke(ws, me, msg);
+      case "scrub": return this.scrub(ws, me, msg);
+      case "wear": return this.addWear(ws, me, msg);
+      case "repaint": return this.repaint(ws, me, msg);
+      case "suggest": return this.suggest(ws, me, msg);
+      case "vote": return this.vote(me, msg);
+      case "unsuggest": return this.unsuggest(me, msg);
+      case "report-suggestion": return this.reportSuggestion(me, msg);
+      case "admin": return this.admin(ws, me, msg);
     }
   }
 
@@ -100,6 +160,24 @@ export class Lobby extends DurableObject {
 
   webSocketError(ws) {
     this.broadcastPresence(ws);
+  }
+
+  async hello(ws, me, msg) {
+    if (me.id || !/^[0-9a-f-]{36}$/.test(msg.id)) return;
+    me.id = msg.id;
+    me.page = PAGES.includes(msg.page) ? msg.page : null;
+    ws.serializeAttachment(me);
+
+    // Every visit nudges the site's colour a little, so it drifts by itself.
+    this.palette.hue = (this.palette.hue + randomInt(-2, 2) + 360) % 360;
+    await this.ctx.storage.put("palette", this.palette);
+
+    this.send(ws, { type: "shouts", shouts: this.publicShouts(me.id) });
+    this.send(ws, this.chessState(me.id));
+    this.send(ws, { type: "suggestions", list: this.publicSuggestions(me.id) });
+    if (me.page) this.send(ws, this.chaosState(me.page));
+    this.broadcast(this.paletteMessage());
+    this.broadcastPresence();
   }
 
   // ---- Sending ----------------------------------------------------------------
@@ -113,6 +191,14 @@ export class Lobby extends DurableObject {
     const text = JSON.stringify(msg);
     for (const ws of this.ctx.getWebSockets()) {
       if (ws !== except) try { ws.send(text); } catch {}
+    }
+  }
+
+  // Send the same message to everyone looking at one page.
+  broadcastPage(page, msg) {
+    const text = JSON.stringify(msg);
+    for (const ws of this.ctx.getWebSockets()) {
+      if (ws.deserializeAttachment()?.page === page) try { ws.send(text); } catch {}
     }
   }
 
@@ -267,9 +353,326 @@ export class Lobby extends DurableObject {
 
   async restart(ws) {
     if (!this.canRestart()) return this.send(ws, { type: "notice", about: "chess", text: "This game is still going." });
+    await this.resetChess();
+  }
+
+  async resetChess() {
     this.game = freshGame();
     this.chess = new Chess();
     await this.saveGame();
+  }
+
+  // ---- Chaos: what everyone has left on a page ---------------------------------
+
+  chaosState(page) {
+    const p = this.pages[page];
+    this.pruneStrokes(page);
+    return {
+      type: "chaos",
+      page,
+      stickers: p.stickers,
+      strokes: [...p.strokes.values()],
+      wear: p.wear,
+      total: this.total,
+    };
+  }
+
+  paletteMessage() {
+    return { type: "palette", hue: this.palette.hue, at: this.palette.at, total: this.total };
+  }
+
+  // Spend from a visitor's ink, which refills a little every second.
+  spendInk(ws, me, amount) {
+    const now = Date.now();
+    const ink = Math.min(INK_MAX, (me.ink ?? INK_MAX) + ((now - (me.inkAt || now)) / 1000) * INK_PER_SEC);
+    if (ink < amount * 0.9) return false;          // a little slack for rounding
+    me.ink = Math.max(0, ink - amount);
+    me.inkAt = now;
+    ws.serializeAttachment(me);
+    return true;
+  }
+
+  async sticker(ws, me, msg) {
+    const page = me.page;
+    if (!page || !STICKERS.includes(msg.kind) || !inBounds(msg.x, msg.y)) return;
+    const now = Date.now();
+    if (now - (me.lastSticker || 0) < STICKER_GAP_MS) return;
+    me.lastSticker = now;
+    ws.serializeAttachment(me);
+
+    const p = this.pages[page];
+    const s = {
+      id: this.nextId++,
+      kind: msg.kind,
+      x: msg.x,
+      y: msg.y,
+      rot: randomInt(-25, 25),
+      colour: PAINT[randomInt(0, PAINT.length - 2)],   // for the shapes; not white
+      at: now,
+    };
+    p.stickers.push(s);
+    const removed = p.stickers.splice(0, Math.max(0, p.stickers.length - STICKERS_PER_PAGE)).map((x) => x.id);
+    await this.ctx.storage.put({ [`stickers:${page}`]: p.stickers, nextId: this.nextId });
+    this.broadcastPage(page, { type: "sticker-add", sticker: s, removed });
+  }
+
+  pruneStrokes(page) {
+    const p = this.pages[page];
+    const old = [...p.strokes.values()].filter((s) => Date.now() - s.at > PAINT_LIFE_MS).map((s) => s.id);
+    for (const id of old) p.strokes.delete(id);
+    if (old.length) this.ctx.storage.delete(old.map((id) => `stroke:${page}:${id}`));
+    return old;
+  }
+
+  async stroke(ws, me, msg) {
+    const page = me.page;
+    if (!page || !PAINT.includes(msg.colour)) return;
+    if (!Number.isInteger(msg.size) || msg.size < 4 || msg.size > 40) return;
+    const pts = msg.points;
+    if (!Array.isArray(pts) || pts.length < 2 || pts.length > STROKE_POINTS) return;
+    if (!pts.every((pt) => Array.isArray(pt) && pt.length === 2 && inBounds(pt[0], pt[1]))) return;
+
+    let length = 0;
+    for (let i = 1; i < pts.length; i++) length += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    if (!this.spendInk(ws, me, length)) {
+      return this.send(ws, { type: "notice", about: "chaos", text: "Out of ink.  It refills in a minute or two." });
+    }
+
+    const p = this.pages[page];
+    const removed = this.pruneStrokes(page);
+    const s = { id: this.nextId++, colour: msg.colour, size: msg.size, points: pts, at: Date.now() };
+    p.strokes.set(s.id, s);
+    while (p.strokes.size > STROKES_PER_PAGE) {
+      const oldest = p.strokes.keys().next().value;
+      p.strokes.delete(oldest);
+      removed.push(oldest);
+    }
+    await this.ctx.storage.put({ [`stroke:${page}:${s.id}`]: s, nextId: this.nextId });
+    if (removed.length) await this.ctx.storage.delete(removed.map((id) => `stroke:${page}:${id}`));
+    this.broadcastPage(page, { type: "stroke-add", stroke: s, removed });
+  }
+
+  async scrub(ws, me, msg) {
+    const page = me.page;
+    if (!page || !Array.isArray(msg.ids)) return;
+    const now = Date.now();
+    if (now - (me.lastScrub || 0) < SCRUB_GAP_MS) return;
+    me.lastScrub = now;
+    ws.serializeAttachment(me);
+
+    const p = this.pages[page];
+    const ids = msg.ids.slice(0, 30).filter((id) => p.strokes.has(id));
+    if (!ids.length) return;
+    for (const id of ids) p.strokes.delete(id);
+    await this.ctx.storage.delete(ids.map((id) => `stroke:${page}:${id}`));
+    this.broadcastPage(page, { type: "stroke-remove", ids });
+  }
+
+  // Clicks leave grime; the paths people take leave dust; used things get worn.
+  async addWear(ws, me, msg) {
+    const page = me.page;
+    if (!page) return;
+    const now = Date.now();
+    if (now - (me.lastWear || 0) < WEAR_GAP_MS) return;
+    me.lastWear = now;
+    ws.serializeAttachment(me);
+
+    const w = this.pages[page].wear;
+    const changed = { clicks: {}, trail: {}, keys: {} };
+    const bump = (map, out, x, y) => {
+      if (!inBounds(x, y)) return;
+      const cell = `${Math.floor(x / WEAR_CELL)},${Math.floor(y / WEAR_CELL)}`;
+      if (!(cell in map) && Object.keys(map).length >= WEAR_CELLS_MAX) return;
+      out[cell] = map[cell] = (map[cell] || 0) + 1;
+    };
+
+    const clicks = Array.isArray(msg.clicks) ? msg.clicks.slice(0, 30) : [];
+    for (const c of clicks) {
+      if (!Array.isArray(c)) continue;
+      bump(w.clicks, changed.clicks, c[0], c[1]);
+      const key = clean(c[2], 40);
+      if (key && (key in w.keys || Object.keys(w.keys).length < WEAR_KEYS_MAX)) {
+        changed.keys[key] = w.keys[key] = (w.keys[key] || 0) + 1;
+      }
+    }
+    const trail = Array.isArray(msg.trail) ? msg.trail.slice(0, 60) : [];
+    for (const t of trail) if (Array.isArray(t)) bump(w.trail, changed.trail, t[0], t[1]);
+
+    this.total += clicks.length;
+    await this.ctx.storage.put({ [`wear:${page}`]: w, total: this.total });
+    this.broadcastPage(page, { type: "wear-add", ...changed, total: this.total });
+  }
+
+  // Anyone can repaint the whole site's colours for everyone.
+  async repaint(ws, me, msg) {
+    if (!Number.isInteger(msg.hue) || msg.hue < 0 || msg.hue > 359) return;
+    const now = Date.now();
+    if (now - (me.lastRepaint || 0) < REPAINT_GAP_MS) return;
+    me.lastRepaint = now;
+    ws.serializeAttachment(me);
+    this.palette = { hue: msg.hue, at: now };
+    await this.ctx.storage.put("palette", this.palette);
+    this.broadcast(this.paletteMessage());
+  }
+
+  // ---- Suggestions ---------------------------------------------------------------
+
+  publicSuggestions(viewer) {
+    return this.suggestions
+      .filter((s) => s.reports.length < REPORTS_TO_HIDE)
+      .map((s) => ({
+        id: s.id, text: s.text, at: s.at, done: s.done,
+        votes: s.votes.length, voted: s.votes.includes(viewer), mine: s.by === viewer,
+      }));
+  }
+
+  async saveSuggestions() {
+    await this.ctx.storage.put({ suggestions: this.suggestions, nextId: this.nextId });
+    this.broadcastEach((id) => ({ type: "suggestions", list: this.publicSuggestions(id) }));
+  }
+
+  async suggest(ws, me, msg) {
+    const text = clean(msg.text, SUGGESTION_MAX);
+    if (!text) return;
+    const now = Date.now();
+    if (now - (me.lastSuggest || 0) < SUGGEST_GAP_MS) {
+      return this.send(ws, { type: "notice", about: "suggest", text: "One suggestion a minute, please." });
+    }
+    me.lastSuggest = now;
+    ws.serializeAttachment(me);
+    this.suggestions.push({ id: this.nextId++, by: me.id, text, at: now, votes: [me.id], reports: [], done: false });
+    if (this.suggestions.length > SUGGESTIONS_KEPT) {
+      // Drop the least-voted (oldest first) to make room.
+      const worst = [...this.suggestions].sort((a, b) => a.votes.length - b.votes.length || a.at - b.at)[0];
+      this.suggestions = this.suggestions.filter((s) => s !== worst);
+    }
+    await this.saveSuggestions();
+  }
+
+  async vote(me, msg) {
+    const s = this.suggestions.find((s) => s.id === msg.id);
+    if (!s || s.done) return;
+    s.votes = s.votes.includes(me.id) ? s.votes.filter((v) => v !== me.id) : [...s.votes, me.id];
+    await this.saveSuggestions();
+  }
+
+  async unsuggest(me, msg) {
+    const before = this.suggestions.length;
+    this.suggestions = this.suggestions.filter((s) => !(s.id === msg.id && s.by === me.id));
+    if (this.suggestions.length !== before) await this.saveSuggestions();
+  }
+
+  async reportSuggestion(me, msg) {
+    const s = this.suggestions.find((s) => s.id === msg.id);
+    if (!s || s.by === me.id || s.reports.includes(me.id)) return;
+    s.reports.push(me.id);
+    await this.saveSuggestions();
+  }
+
+  // ---- Admin: Martin's controls ------------------------------------------------------
+
+  async admin(ws, me, msg) {
+    if ((me.badKeys || 0) >= 5) return;                       // too many wrong keys on this connection
+    if (!sameKey(msg.key, this.env.ADMIN_KEY)) {
+      me.badKeys = (me.badKeys || 0) + 1;
+      ws.serializeAttachment(me);
+      return this.send(ws, { type: "admin-reply", ok: false, text: "Wrong key." });
+    }
+
+    const pages = msg.page === "all" ? PAGES : PAGES.includes(msg.page) ? [msg.page] : [];
+    const del = [];
+    let text = "Done.";
+
+    switch (msg.action) {
+      case "check":
+        break;
+      case "reset-stickers":
+        for (const p of pages) this.pages[p].stickers = [];
+        break;
+      case "reset-paint":
+        for (const p of pages) {
+          del.push(...[...this.pages[p].strokes.keys()].map((id) => `stroke:${p}:${id}`));
+          this.pages[p].strokes.clear();
+        }
+        break;
+      case "reset-wear":
+        for (const p of pages) this.pages[p].wear = freshWear();
+        if (msg.page === "all") this.total = 0;
+        break;
+      case "reset-chaos":
+        for (const p of pages) {
+          del.push(...[...this.pages[p].strokes.keys()].map((id) => `stroke:${p}:${id}`));
+          this.pages[p] = { stickers: [], strokes: new Map(), wear: freshWear() };
+        }
+        if (msg.page === "all") this.total = 0;
+        break;
+      case "reset-colours":
+        this.palette = { hue: 218, at: 0 };
+        break;
+      case "reset-chess":
+        await this.resetChess();
+        break;
+      case "delete-shout":
+        this.shouts = this.shouts.filter((s) => s.id !== msg.id);
+        await this.saveShouts();
+        break;
+      case "unhide-shout": {
+        const s = this.shouts.find((s) => s.id === msg.id);
+        if (s) s.reports = [];
+        await this.saveShouts();
+        break;
+      }
+      case "delete-suggestion":
+        this.suggestions = this.suggestions.filter((s) => s.id !== msg.id);
+        await this.saveSuggestions();
+        break;
+      case "done-suggestion": {
+        const s = this.suggestions.find((s) => s.id === msg.id);
+        if (s) s.done = !s.done;
+        await this.saveSuggestions();
+        break;
+      }
+      case "unhide-suggestion": {
+        const s = this.suggestions.find((s) => s.id === msg.id);
+        if (s) s.reports = [];
+        await this.saveSuggestions();
+        break;
+      }
+      default:
+        return this.send(ws, { type: "admin-reply", ok: false, text: "Unknown action." });
+    }
+
+    if (["reset-stickers", "reset-paint", "reset-wear", "reset-chaos"].includes(msg.action)) {
+      if (!pages.length) return this.send(ws, { type: "admin-reply", ok: false, text: "Pick a page." });
+      const save = { total: this.total };
+      for (const p of pages) Object.assign(save, { [`stickers:${p}`]: this.pages[p].stickers, [`wear:${p}`]: this.pages[p].wear });
+      await this.ctx.storage.put(save);
+      if (del.length) for (let i = 0; i < del.length; i += 128) await this.ctx.storage.delete(del.slice(i, i + 128));
+      for (const p of pages) this.broadcastPage(p, this.chaosState(p));
+      text = `Done: ${msg.action.replace("reset-", "")} cleared on ${msg.page === "all" ? "every page" : msg.page}.`;
+    }
+    if (msg.action === "reset-colours") {
+      await this.ctx.storage.put("palette", this.palette);
+      this.broadcast(this.paletteMessage());
+    }
+    this.send(ws, { type: "admin-reply", ok: true, text, data: this.adminData() });
+  }
+
+  // Everything the admin page lists, including hidden (reported) items.
+  adminData() {
+    return {
+      shouts: this.shouts.map((s) => ({ id: s.id, name: s.name, text: s.text, at: s.at, reports: s.reports.length })),
+      suggestions: this.suggestions.map((s) => ({
+        id: s.id, text: s.text, at: s.at, votes: s.votes.length, reports: s.reports.length, done: s.done,
+      })),
+      pages: Object.fromEntries(PAGES.map((p) => [p, {
+        stickers: this.pages[p].stickers.length,
+        strokes: this.pages[p].strokes.size,
+        wearCells: Object.keys(this.pages[p].wear.clicks).length + Object.keys(this.pages[p].wear.trail).length,
+      }])),
+      hue: this.palette.hue,
+      total: this.total,
+    };
   }
 }
 
@@ -277,6 +680,10 @@ export class Lobby extends DurableObject {
 
 function freshGame() {
   return { moves: [], white: null, black: null, result: null, reason: null, updatedAt: Date.now() };
+}
+
+function freshWear() {
+  return { clicks: {}, trail: {}, keys: {} };
 }
 
 // Rebuild the board from the list of moves (so repetition draws still work).
@@ -290,4 +697,23 @@ function replay(moves) {
 function clean(value, max) {
   const text = String(value ?? "").replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").replace(/\s+/g, " ").trim();
   return Array.from(text).slice(0, max).join("").trim();
+}
+
+// A position in units: whole numbers, a bit outside the main column is fine.
+function inBounds(x, y) {
+  return Number.isInteger(x) && Number.isInteger(y) && x >= -600 && x <= 1600 && y >= -300 && y <= 30000;
+}
+
+function randomInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+// Compare two keys without leaking how much of them matched.
+function sameKey(given, real) {
+  if (typeof given !== "string" || typeof real !== "string" || !real) return false;
+  const a = new TextEncoder().encode(given);
+  const b = new TextEncoder().encode(real);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < b.length; i++) diff |= (a[i] ?? 0) ^ b[i];
+  return diff === 0;
 }
