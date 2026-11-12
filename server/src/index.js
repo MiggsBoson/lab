@@ -7,6 +7,8 @@
 //   chess        one shared board: the first mover plays white, the next mover black
 //   chaos        stickers, spray paint, wear and tear, and the site's shared colours
 //   suggestions  ideas for the lab, with one vote per visitor
+//   events       surprises the server sets off every so often, for everyone at once
+//   usage        daily counts of what people use, for Martin's admin page
 //   admin        Martin's reset and delete controls, locked by the ADMIN_KEY secret
 //
 // Everything lives in one Durable Object, "the lobby".  It handles one message at
@@ -61,6 +63,14 @@ const SUGGESTIONS_KEPT = 100;
 const SUGGESTION_MAX = 140;
 const SUGGEST_GAP_MS = 60_000;
 
+// Surprise events: how long each lasts.  A new one is due 15 to 45 minutes after the
+// last one ends; it starts then if someone is on the site, or when the next person arrives.
+const EVENTS = { snow: 6, gravity: 4, flip: 2, disco: 3, dark: 4, ghost: 8, treasure: 15, paintparty: 10 };
+const EVENT_GAP_MINUTES = [15, 45];
+
+// Usage counts are kept per day, for this many days.
+const STATS_DAYS = 60;
+
 // ---- The Worker: checks the request, then hands it to the lobby --------------
 
 export default {
@@ -84,7 +94,8 @@ export class Lobby extends DurableObject {
     // Load saved state before handling any message.  This also runs when the
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
-      const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId"];
+      const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId",
+                    "event", "lastEvent", "nextEventAt"];
       for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
       const saved = await ctx.storage.get(keys);
 
@@ -97,6 +108,9 @@ export class Lobby extends DurableObject {
       this.total = saved.get("total") || 0;        // every click ever: the site's age
       this.suggestions = saved.get("suggestions") || [];
       this.nextId = saved.get("nextId") || 1;
+      this.event = saved.get("event") || null;
+      this.lastEvent = saved.get("lastEvent") || null;
+      this.nextEventAt = saved.get("nextEventAt") || Date.now() + 5 * 60_000;
 
       this.pages = {};
       for (const p of PAGES) {
@@ -149,6 +163,7 @@ export class Lobby extends DurableObject {
       case "vote": return this.vote(me, msg);
       case "unsuggest": return this.unsuggest(me, msg);
       case "report-suggestion": return this.reportSuggestion(me, msg);
+      case "found": return this.found(ws, me, msg);
       case "admin": return this.admin(ws, me, msg);
     }
   }
@@ -178,6 +193,11 @@ export class Lobby extends DurableObject {
     if (me.page) this.send(ws, this.chaosState(me.page));
     this.broadcast(this.paletteMessage());
     this.broadcastPresence();
+    await this.count(`visit:${msg.page === "admin" ? "admin" : me.page || "other"}`, me.id);
+
+    if (this.event && Date.now() >= this.event.end) await this.endEvent();
+    if (!this.event && Date.now() >= this.nextEventAt) await this.startEvent();
+    else if (this.event) this.send(ws, this.eventMessage());
   }
 
   // ---- Sending ----------------------------------------------------------------
@@ -224,13 +244,14 @@ export class Lobby extends DurableObject {
 
   // ---- Reactions --------------------------------------------------------------
 
-  react(ws, me, msg) {
+  async react(ws, me, msg) {
     if (!EMOJIS.includes(msg.emoji)) return;
     const now = Date.now();
     if (now - me.lastReact < REACT_GAP_MS) return;
     me.lastReact = now;
     ws.serializeAttachment(me);
     this.broadcast({ type: "react", emoji: msg.emoji });
+    await this.count("react");
   }
 
   // ---- Shout box --------------------------------------------------------------
@@ -257,6 +278,7 @@ export class Lobby extends DurableObject {
     me.lastShout = now;
     ws.serializeAttachment(me);
     this.shouts.push({ id: this.nextShoutId++, by: me.id, name, text, at: now, reports: [] });
+    await this.count("shout");
     this.shouts = this.shouts.slice(-SHOUTS_KEPT);
     await this.saveShouts();
   }
@@ -332,6 +354,7 @@ export class Lobby extends DurableObject {
     if (!move) return this.refuse(ws, me, "That move isn't allowed.");
 
     if (!owner) g[side === "w" ? "white" : "black"] = me.id;   // first move with a colour claims it
+    await this.count("chess-move");
     g.moves.push({ from: move.from, to: move.to, promotion: move.promotion });
 
     const c = this.chess;
@@ -383,6 +406,7 @@ export class Lobby extends DurableObject {
 
   // Spend from a visitor's ink, which refills a little every second.
   spendInk(ws, me, amount) {
+    if (this.event?.kind === "paintparty") return true;   // unlimited ink during a paint party
     const now = Date.now();
     const ink = Math.min(INK_MAX, (me.ink ?? INK_MAX) + ((now - (me.inkAt || now)) / 1000) * INK_PER_SEC);
     if (ink < amount * 0.9) return false;          // a little slack for rounding
@@ -411,6 +435,7 @@ export class Lobby extends DurableObject {
       at: now,
     };
     p.stickers.push(s);
+    await this.count("sticker");
     const removed = p.stickers.splice(0, Math.max(0, p.stickers.length - STICKERS_PER_PAGE)).map((x) => x.id);
     await this.ctx.storage.put({ [`stickers:${page}`]: p.stickers, nextId: this.nextId });
     this.broadcastPage(page, { type: "sticker-add", sticker: s, removed });
@@ -441,6 +466,7 @@ export class Lobby extends DurableObject {
     const p = this.pages[page];
     const removed = this.pruneStrokes(page);
     const s = { id: this.nextId++, colour: msg.colour, size: msg.size, points: pts, at: Date.now() };
+    await this.count("paint");
     p.strokes.set(s.id, s);
     while (p.strokes.size > STROKES_PER_PAGE) {
       const oldest = p.strokes.keys().next().value;
@@ -465,6 +491,7 @@ export class Lobby extends DurableObject {
     if (!ids.length) return;
     for (const id of ids) p.strokes.delete(id);
     await this.ctx.storage.delete(ids.map((id) => `stroke:${page}:${id}`));
+    await this.count("scrub");
     this.broadcastPage(page, { type: "stroke-remove", ids });
   }
 
@@ -513,6 +540,7 @@ export class Lobby extends DurableObject {
     this.palette = { hue: msg.hue, at: now };
     await this.ctx.storage.put("palette", this.palette);
     this.broadcast(this.paletteMessage());
+    await this.count("repaint");
   }
 
   // ---- Suggestions ---------------------------------------------------------------
@@ -541,6 +569,7 @@ export class Lobby extends DurableObject {
     me.lastSuggest = now;
     ws.serializeAttachment(me);
     this.suggestions.push({ id: this.nextId++, by: me.id, text, at: now, votes: [me.id], reports: [], done: false });
+    await this.count("suggest");
     if (this.suggestions.length > SUGGESTIONS_KEPT) {
       // Drop the least-voted (oldest first) to make room.
       const worst = [...this.suggestions].sort((a, b) => a.votes.length - b.votes.length || a.at - b.at)[0];
@@ -553,6 +582,7 @@ export class Lobby extends DurableObject {
     const s = this.suggestions.find((s) => s.id === msg.id);
     if (!s || s.done) return;
     s.votes = s.votes.includes(me.id) ? s.votes.filter((v) => v !== me.id) : [...s.votes, me.id];
+    await this.count("vote");
     await this.saveSuggestions();
   }
 
@@ -567,6 +597,103 @@ export class Lobby extends DurableObject {
     if (!s || s.by === me.id || s.reports.includes(me.id)) return;
     s.reports.push(me.id);
     await this.saveSuggestions();
+  }
+
+  // ---- Surprise events ---------------------------------------------------------------
+
+  eventMessage() {
+    const e = this.event;
+    return { type: "event", kind: e.kind, start: e.start, end: e.end, seed: e.seed,
+             page: e.page, x: e.x, y: e.y, foundBy: e.foundBy || null, now: Date.now() };
+  }
+
+  someoneHere() {
+    return this.ctx.getWebSockets().some((ws) => ws.deserializeAttachment()?.id);
+  }
+
+  async startEvent(kind) {
+    const choices = Object.keys(EVENTS).filter((k) => k !== this.lastEvent);
+    if (!EVENTS[kind]) kind = choices[randomInt(0, choices.length - 1)];
+    const now = Date.now();
+    const e = { kind, start: now, end: now + EVENTS[kind] * 60_000, seed: randomInt(1, 1e9) };
+    if (kind === "treasure") Object.assign(e, { page: PAGES[randomInt(0, PAGES.length - 1)], x: randomInt(80, 920), y: randomInt(150, 1300) });
+    this.event = e;
+    this.lastEvent = kind;
+    this.nextEventAt = e.end + randomInt(...EVENT_GAP_MINUTES) * 60_000;
+    await this.ctx.storage.put({ event: e, lastEvent: kind, nextEventAt: this.nextEventAt });
+    await this.count(`event:${kind}`);
+    this.broadcast(this.eventMessage());
+    await this.scheduleAlarm();
+  }
+
+  async endEvent() {
+    this.event = null;
+    await this.ctx.storage.put("event", null);
+    this.broadcast({ type: "event-end" });
+    await this.scheduleAlarm();
+  }
+
+  // Wakes the object when an event should end or a new one is due.
+  async scheduleAlarm() {
+    if (this.event) return this.ctx.storage.setAlarm(this.event.end);
+    if (this.nextEventAt > Date.now()) return this.ctx.storage.setAlarm(this.nextEventAt);
+    await this.ctx.storage.deleteAlarm();   // due, but nobody's here: the next visitor starts it
+  }
+
+  async alarm() {
+    if (this.event && Date.now() >= this.event.end) return this.endEvent();
+    if (!this.event && Date.now() >= this.nextEventAt && this.someoneHere()) return this.startEvent();
+    await this.scheduleAlarm();
+  }
+
+  // Someone clicked the golden key: they win, and a trophy is left where it was.
+  async found(ws, me, msg) {
+    const e = this.event;
+    if (!e || e.kind !== "treasure" || e.foundBy || me.page !== e.page || !inBounds(msg.x, msg.y)) return;
+    e.foundBy = clean(msg.name, NAME_MAX) || "Someone";
+    e.end = Math.min(e.end, Date.now() + 45_000);          // show the winner for a bit, then end
+    const p = this.pages[e.page];
+    const trophy = { id: this.nextId++, kind: "trophy", x: msg.x, y: msg.y, rot: randomInt(-12, 12), colour: "#f4a261", at: Date.now() };
+    p.stickers.push(trophy);
+    const removed = p.stickers.splice(0, Math.max(0, p.stickers.length - STICKERS_PER_PAGE)).map((x) => x.id);
+    await this.ctx.storage.put({ event: e, [`stickers:${e.page}`]: p.stickers, nextId: this.nextId });
+    await this.count("key-found");
+    this.broadcastPage(e.page, { type: "sticker-add", sticker: trophy, removed });
+    this.broadcast(this.eventMessage());
+    await this.scheduleAlarm();
+  }
+
+  // ---- Usage counts -----------------------------------------------------------------
+  // Counts only.  Visitors are kept as short scrambled tags (not their ids), just to
+  // count how many different people came each day and how many came back.
+
+  async count(what, visitorId) {
+    const day = new Date().toISOString().slice(0, 10);
+    if (this.statsKey !== `stats:${day}`) {
+      this.statsKey = `stats:${day}`;
+      this.stats = (await this.ctx.storage.get(this.statsKey)) || { visitors: [], counts: {} };
+      const old = new Date(Date.now() - STATS_DAYS * 864e5).toISOString().slice(0, 10);
+      const expired = [...(await this.ctx.storage.list({ prefix: "stats:", end: `stats:${old}` })).keys()];
+      if (expired.length) await this.ctx.storage.delete(expired.slice(0, 128));
+    }
+    this.stats.counts[what] = (this.stats.counts[what] || 0) + 1;
+    if (visitorId) {
+      const tag = shortHash(visitorId);
+      if (!this.stats.visitors.includes(tag) && this.stats.visitors.length < 5000) this.stats.visitors.push(tag);
+    }
+    await this.ctx.storage.put(this.statsKey, this.stats);
+  }
+
+  async usage() {
+    const days = [...(await this.ctx.storage.list({ prefix: "stats:" }))].sort(([a], [b]) => (a < b ? -1 : 1));
+    const seen = new Set();
+    const out = [];
+    for (const [key, day] of days) {
+      const returning = day.visitors.filter((v) => seen.has(v)).length;
+      day.visitors.forEach((v) => seen.add(v));
+      out.push({ day: key.slice(6), visitors: day.visitors.length, returning, counts: day.counts });
+    }
+    return out.reverse().slice(0, 14);
   }
 
   // ---- Admin: Martin's controls ------------------------------------------------------
@@ -612,6 +739,17 @@ export class Lobby extends DurableObject {
       case "reset-chess":
         await this.resetChess();
         break;
+      case "start-event":
+        if (this.event) await this.endEvent();
+        await this.startEvent(msg.kind);
+        text = `Started: ${this.event.kind}.`;
+        break;
+      case "stop-event":
+        if (this.event) await this.endEvent();
+        text = "Stopped.";
+        break;
+      case "usage":
+        break;
       case "delete-shout":
         this.shouts = this.shouts.filter((s) => s.id !== msg.id);
         await this.saveShouts();
@@ -655,7 +793,7 @@ export class Lobby extends DurableObject {
       await this.ctx.storage.put("palette", this.palette);
       this.broadcast(this.paletteMessage());
     }
-    this.send(ws, { type: "admin-reply", ok: true, text, data: this.adminData() });
+    this.send(ws, { type: "admin-reply", ok: true, text, data: { ...this.adminData(), usage: await this.usage() } });
   }
 
   // Everything the admin page lists, including hidden (reported) items.
@@ -671,6 +809,8 @@ export class Lobby extends DurableObject {
         wearCells: Object.keys(this.pages[p].wear.clicks).length + Object.keys(this.pages[p].wear.trail).length,
       }])),
       hue: this.palette.hue,
+      event: this.event && { kind: this.event.kind, end: this.event.end, foundBy: this.event.foundBy || null },
+      nextEventAt: this.nextEventAt,
       total: this.total,
     };
   }
@@ -702,6 +842,13 @@ function clean(value, max) {
 // A position in units: whole numbers, a bit outside the main column is fine.
 function inBounds(x, y) {
   return Number.isInteger(x) && Number.isInteger(y) && x >= -600 && x <= 1600 && y >= -300 && y <= 30000;
+}
+
+// A short scrambled tag for a visitor id (FNV-1a), for counting returning visitors.
+function shortHash(text) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return h.toString(36);
 }
 
 function randomInt(min, max) {

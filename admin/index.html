@@ -66,6 +66,33 @@
       </section>
 
       <section class="card">
+        <h2>Surprises</h2>
+        <p id="event-now" class="muted"></p>
+        <div class="row">
+          <select id="event-kind" aria-label="Which surprise">
+            <option value="random">Random</option>
+            <option value="snow">❄️ Snow</option>
+            <option value="gravity">🍎 Gravity</option>
+            <option value="flip">🙃 Upside down</option>
+            <option value="disco">🪩 Disco</option>
+            <option value="dark">🔦 Lights out</option>
+            <option value="ghost">👻 Ghost</option>
+            <option value="treasure">🗝️ Golden key</option>
+            <option value="paintparty">🎨 Paint party</option>
+          </select>
+          <button id="event-start" class="secondary">Start now</button>
+          <button id="event-stop" class="secondary">Stop</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Usage</h2>
+        <p class="muted">Per day: different visitors (and how many had been before), then how often each thing was used.</p>
+        <div class="row"><button id="usage-refresh" class="secondary">Refresh</button></div>
+        <ol id="usage" class="items" style="margin-top: 0.75rem;"></ol>
+      </section>
+
+      <section class="card">
         <h2>Suggestions</h2>
         <ol id="suggestions" class="items"></ol>
       </section>
@@ -109,6 +136,14 @@
       });
     });
 
+    $("event-start").addEventListener("click", () => admin("start-event", { kind: $("event-kind").value }));
+    $("event-stop").addEventListener("click", () => admin("stop-event"));
+    $("usage-refresh").addEventListener("click", () => admin("usage"));
+
+    // "visit:home" → "home visits", "event:snow" → "snow (surprise)" ...
+    const label = (key) => key.startsWith("visit:") ? `${key.slice(6)} visits`
+      : key.startsWith("event:") ? `${key.slice(6)} (surprise)` : key;
+
     const when = (ms) => new Date(ms).toLocaleString("en-IE", { dateStyle: "short", timeStyle: "short" });
 
     function button(label, onClick, danger) {
@@ -131,6 +166,25 @@
         }
         return tr;
       }));
+      const mins = (ms) => Math.max(0, Math.round((ms - Date.now()) / 60000));
+      $("event-now").textContent = data.event
+        ? `Running now: ${data.event.kind}${data.event.foundBy ? ` (found by ${data.event.foundBy})` : ""}, ${mins(data.event.end)} min left.`
+        : data.nextEventAt <= Date.now()
+          ? "Next surprise is due: it starts when someone visits."
+          : `Next surprise in about ${mins(data.nextEventAt)} min (if someone's on the site).`;
+
+      $("usage").replaceChildren(...(data.usage || []).map((d) => {
+        const li = document.createElement("li");
+        const head = document.createElement("strong");
+        head.textContent = `${d.day}: ${d.visitors} visitor${d.visitors === 1 ? "" : "s"} (${d.returning} returning)`;
+        const body = document.createElement("div");
+        body.className = "muted";
+        body.textContent = Object.entries(d.counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${label(k)} ${n}`).join(" · ");
+        li.append(head, body);
+        return li;
+      }));
+      if (!(data.usage || []).length) $("usage").textContent = "Nothing counted yet.";
+
       $("summary").textContent = `Site colour hue ${data.hue} · ${data.total} clicks recorded (the site's age).`;
 
       $("suggestions").replaceChildren(...data.suggestions.map((s) => {
