@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tug of war · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
+  <style>
+    /* Styles only this page needs. */
+    .score { display: flex; justify-content: space-between; gap: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .score .blue { text-align: right; }
+    .field {
+      position: relative;
+      height: 5.5rem;
+      margin: 1rem 0;
+      border-radius: 12px;
+      background: linear-gradient(90deg, rgb(230 57 70 / 0.22), transparent 18%, transparent 82%, rgb(58 134 255 / 0.22));
+      overflow: hidden;
+    }
+    .field::before {                          /* the middle line */
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 15%;
+      bottom: 15%;
+      border-left: 2px dashed var(--muted);
+      opacity: 0.6;
+    }
+    .rope {
+      position: absolute;
+      left: -5%;
+      right: -5%;
+      top: calc(50% - 5px);
+      height: 10px;
+      border-radius: 5px;
+      background: repeating-linear-gradient(60deg, #c8a06a 0 6px, #9c7442 6px 12px);
+      box-shadow: 0 2px 3px rgb(0 0 0 / 0.25);
+      translate: var(--shift, 0%) 0;
+      transition: translate 0.12s linear;
+    }
+    .knot {
+      position: absolute;
+      top: 50%;
+      left: calc(50% + var(--pos, 0) * 45%);
+      font-size: 2rem;
+      line-height: 1;
+      transform: translate(-50%, -50%);
+      transition: left 0.12s linear;
+      filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+    }
+    .teams { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .teams button[aria-pressed="false"] { background: transparent; color: var(--fg); }
+    .teams .red { --team: #e63946; border-color: var(--team); }
+    .teams .blue { --team: #3a86ff; border-color: var(--team); }
+    .teams button[aria-pressed="true"] { background: var(--team); color: #fff; }
+    #pull {
+      display: block;
+      width: 100%;
+      margin-top: 0.9rem;
+      padding: 1.2rem;
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    #pull.red { background: #e63946; border-color: #e63946; color: #fff; }
+    #pull.blue { background: #3a86ff; border-color: #3a86ff; color: #fff; }
+    #pull:active { transform: scale(0.97); }
+    .win {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      font-size: clamp(2.5rem, 10vw, 5rem);
+      font-weight: 900;
+      text-shadow: 0 4px 18px rgb(0 0 0 / 0.35);
+      animation: win-pop 2.2s ease-out forwards;
+    }
+    @keyframes win-pop { 0% { scale: 0.3; opacity: 0; } 15% { scale: 1.1; opacity: 1; } 75% { opacity: 1; } 100% { scale: 1.4; opacity: 0; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Tug of war</h1>
+    <p class="lede">Red against blue.  Pick a side and hammer PULL.  The first team to drag the knot to their end wins the round.</p>
+
+    <section class="card">
+      <div class="score">
+        <span class="red">🔴 Red: <span id="red-wins">0</span> wins<br><span class="muted" id="red-players"></span></span>
+        <span class="blue">🔵 Blue: <span id="blue-wins">0</span> wins<br><span class="muted" id="blue-players"></span></span>
+      </div>
+      <div class="field" aria-hidden="true">
+        <div class="rope" id="rope"></div>
+        <div class="knot" id="knot">🎀</div>
+      </div>
+      <p id="where" class="muted" aria-live="polite">Connecting…</p>
+      <div class="teams" role="group" aria-label="Pick a team">
+        <button type="button" class="red" data-team="red" aria-pressed="false">Join red</button>
+        <button type="button" class="blue" data-team="blue" aria-pressed="false">Join blue</button>
+      </div>
+      <button id="pull" type="button" disabled>Pick a team first</button>
+      <p class="muted" style="margin-top: 0.6rem;">Keyboard: press Space to pull.  <span id="mine"></span></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+
+    const $ = (id) => document.getElementById(id);
+    let team = null;
+    let state = null;
+    let myPulls = 0;
+    try { team = localStorage.getItem("lab-tug-team"); } catch {}
+
+    function chooseTeam(t) {
+      team = t;
+      try { localStorage.setItem("lab-tug-team", t); } catch {}
+      send({ type: "tug-join", team: t });
+      document.querySelectorAll(".teams button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.team === t));
+      const pull = $("pull");
+      pull.disabled = false;
+      pull.className = t;
+      pull.textContent = t === "red" ? "◀ PULL" : "PULL ▶";
+    }
+    document.querySelectorAll(".teams button").forEach((b) => b.addEventListener("click", () => chooseTeam(b.dataset.team)));
+    on("open", () => { if (team) chooseTeam(team); });   // rejoin your side after a reload or reconnect
+
+    let lastPull = 0;
+    function pull() {
+      if (!team || Date.now() - lastPull < 70) return;
+      lastPull = Date.now();
+      send({ type: "tug-pull" });
+      myPulls++;
+      $("mine").textContent = `You've pulled ${myPulls} times.`;
+      navigator.vibrate?.(8);                      // a tiny buzz on phones
+    }
+    $("pull").addEventListener("pointerdown", (e) => { e.preventDefault(); pull(); });
+    document.addEventListener("keydown", (e) => {
+      const onPage = e.target === document.body || e.target.id === "pull";   // not while typing or on other buttons
+      if (e.code === "Space" && !e.repeat && onPage) { e.preventDefault(); pull(); }
+    });
+
+    on("tug", (msg) => {
+      state = msg;
+      const share = msg.pos / msg.end;             // -1 (red end) ... 1 (blue end)
+      $("knot").style.setProperty("--pos", share);
+      $("rope").style.setProperty("--shift", `${share * 45}%`);
+      $("red-wins").textContent = msg.wins.red;
+      $("blue-wins").textContent = msg.wins.blue;
+      $("red-players").textContent = `${msg.players.red} pulling`;
+      $("blue-players").textContent = `${msg.players.blue} pulling`;
+      const lead = Math.abs(msg.pos);
+      $("where").textContent = lead === 0 ? "Dead even." : `${msg.pos < 0 ? "Red" : "Blue"} is ahead: ${msg.end - lead} more pulls to win.`;
+      if (!team) {                                 // nudge newcomers towards the smaller team
+        const smaller = msg.players.red <= msg.players.blue ? "red" : "blue";
+        document.querySelector(`.teams .${smaller}`).textContent = `Join ${smaller} (needs you)`;
+      }
+      if (msg.winner) celebrate(msg.winner);
+    });
+
+    function celebrate(winner) {
+      const banner = document.createElement("div");
+      banner.className = "win";
+      banner.style.color = winner === "red" ? "#e63946" : "#3a86ff";
+      banner.textContent = `${winner === "red" ? "🔴 Red" : "🔵 Blue"} wins!`;
+      document.body.append(banner);
+      banner.addEventListener("animationend", () => banner.remove());
+      if (winner === team) send({ type: "react", emoji: "🎉" });
+      myPulls = 0;
+    }
+  </script>
+</body>
+</html>

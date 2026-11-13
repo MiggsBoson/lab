@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- The lab's icon: a flask of something bubbling. -->
+  <rect width="100" height="100" rx="22" fill="#1f2d3d"/>
+  <rect x="37" y="15" width="26" height="6" rx="3" fill="#e9e4d8"/>
+  <path d="M42 21h16v21l20 36a5 5 0 0 1-4.4 7.4H26.4A5 5 0 0 1 22 78l20-36z" fill="#e9e4d8"/>
+  <path d="M33.5 58h33l11 20a5 5 0 0 1-4.4 7.4H26.4A5 5 0 0 1 22 78z" fill="#7bd389"/>
+  <circle cx="46" cy="70" r="3.2" fill="#fff" opacity=".85"/>
+  <circle cx="55" cy="63" r="2.2" fill="#fff" opacity=".85"/>
+  <circle cx="51" cy="50" r="2.6" fill="#7bd389"/>
+  <circle cx="47" cy="38" r="1.8" fill="#7bd389"/>
+</svg>

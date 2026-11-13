@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex">
   <title>Admin · The lab</title>
   <link rel="stylesheet" href="../style.css">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
   <style>
     /* Styles only this page needs. */
     #unlock input { flex: 1 1 14rem; width: auto; }
@@ -59,6 +63,7 @@
           <button data-action="reset-chess" class="secondary" data-nopage>Chess game</button>
           <button data-action="reset-magnets" class="secondary" data-nopage>Fridge magnets</button>
           <button data-action="reset-jam" class="secondary" data-nopage>Jam</button>
+          <button data-action="reset-tug" class="secondary" data-nopage>Tug of war scores</button>
         </div>
         <table class="counts" style="margin-top: 1rem;">
           <thead><tr><th>Page</th><th>Stickers</th><th>Paint</th><th>Wear spots</th></tr></thead>
@@ -103,6 +108,11 @@
       <section class="card">
         <h2>Suggestions</h2>
         <ol id="suggestions" class="items"></ol>
+      </section>
+
+      <section class="card">
+        <h2>Polls</h2>
+        <ol id="polls" class="items"></ol>
       </section>
 
       <section class="card">
@@ -198,7 +208,7 @@
       }));
       if (!(data.usage || []).length) $("usage").textContent = "Nothing counted yet.";
 
-      $("summary").textContent = `Site colour hue ${data.hue} · ${data.total} clicks recorded (the site's age) · ${data.visits ?? 0} visits ever.`;
+      $("summary").textContent = `Site colour hue ${data.hue} · ${data.total} clicks recorded (the site's age) · ${data.visits ?? 0} visits ever · tug of war: red ${data.tug?.red ?? 0}, blue ${data.tug?.blue ?? 0}.`;
 
       $("suggestions").replaceChildren(...data.suggestions.map((s) => {
         const li = document.createElement("li");
@@ -234,6 +244,22 @@
         return li;
       }));
       if (!data.shouts.length) $("shouts").textContent = "None yet.";
+
+      $("polls").replaceChildren(...[...(data.polls || [])].reverse().map((p) => {
+        const li = document.createElement("li");
+        const text = document.createElement("div");
+        text.textContent = `${p.q}: ${p.options.join(" / ")}`;
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        meta.textContent = `${when(p.at)} · ${p.open ? "running" : "finished"} · ${p.reports} reports${p.reports >= 2 ? " (hidden)" : ""}`;
+        const row = document.createElement("div");
+        row.className = "row";
+        row.style.marginTop = "0.25rem";
+        row.append(button("Delete", () => { if (confirm("Delete this poll?")) admin("delete-poll", { id: p.id }); }, true));
+        li.append(text, meta, row);
+        return li;
+      }));
+      if (!(data.polls || []).length) $("polls").textContent = "None yet.";
 
       $("notes").replaceChildren(...[...(data.notes || [])].reverse().map((n) => {
         const li = document.createElement("li");

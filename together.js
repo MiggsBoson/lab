@@ -12,6 +12,11 @@
 import { startChaos } from "./chaos.js";
 import { startEvents } from "./events.js";
 import { startExtras } from "./extras.js";
+import { startMenu } from "./menu.js";
+import { getSetting } from "./settings.js";
+
+// Calm mode is a per-visitor setting; apply it before anything starts moving.
+if (getSetting("calm")) document.documentElement.classList.add("calm");
 
 // On this computer, talk to `npx wrangler dev`; online, to the deployed server.
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -126,6 +131,7 @@ if (PAGE !== "admin") {
   startChaos({ on, send, page: PAGE, bar });
   startEvents({ on, send, page: PAGE });
   startExtras({ on, send, page: PAGE });
+  startMenu({ on, send, page: PAGE, bar });
 }
 
 connect();

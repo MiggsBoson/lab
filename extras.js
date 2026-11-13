@@ -6,13 +6,15 @@
 //   tab tricks      the tab's title pleads with you while you're away
 //   secrets         type certain words anywhere on the site...
 
+import { getSetting, onSetting, getName, calm } from "./settings.js";
+
 const ANIMALS = ["🦊", "🐸", "🐙", "🦉", "🐝", "🐢", "🦄", "🐧", "🦔", "🐌", "🦀", "🐞"];
 const DUBLIN = { lat: 53.3498, lon: -6.2603 };
 
 export function startExtras({ on, send, page }) {
   const main = document.querySelector("main");
   if (!main) return;
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const still = calm();
 
   // Where <main> is on the page: positions are shared in "units" (1000 = its width).
   function toUnits(clientX, clientY) {
@@ -35,23 +37,32 @@ export function startExtras({ on, send, page }) {
     lastSent = now;
     const [x, y] = toUnits(e.clientX, e.clientY);
     if (x < -600 || x > 1600 || y < -300 || y > 30000) return;
-    send({ type: "cursor", x, y });
+    if (getSetting("hideMyCursor")) return;
+    send({ type: "cursor", x, y, name: getSetting("nameOnCursor") ? getName() : undefined });
   }, { passive: true });
 
   on("cursor", (msg) => {
+    if (getSetting("noGhosts")) return;
     let c = cursors.get(msg.who);
     if (!c) {
       const el = make("div", "ghost-cursor");
       el.setAttribute("aria-hidden", "true");
-      el.textContent = ANIMALS[parseInt(msg.who, 36) % ANIMALS.length];
+      el.append(make("span", "ghost-animal"), make("span", "ghost-name"));
+      el.firstChild.textContent = ANIMALS[parseInt(msg.who, 36) % ANIMALS.length];
       document.body.append(el);
       c = { el };
       cursors.set(msg.who, c);
     }
+    c.el.lastChild.textContent = msg.name || "";
     const [px, py] = toPage([msg.x, msg.y]);
     c.el.style.transform = `translate(${px}px, ${py}px)`;
     c.el.classList.remove("faded");
     c.at = Date.now();
+  });
+  onSetting("noGhosts", (off) => {
+    if (!off) return;
+    for (const c of cursors.values()) c.el.remove();
+    cursors.clear();
   });
   on("cursor-gone", (msg) => {
     cursors.get(msg.who)?.el.remove();
@@ -71,7 +82,7 @@ export function startExtras({ on, send, page }) {
   on("shouts", (msg) => { shouts = msg.shouts; });
   function echo() {
     setTimeout(echo, 70_000 + Math.random() * 90_000);
-    if (document.hidden || !shouts.length) return;
+    if (document.hidden || !shouts.length || getSetting("noGhosts")) return;
     const s = shouts[Math.floor(Math.random() * shouts.length)];
     const el = make("div", "echo");
     el.setAttribute("aria-hidden", "true");
@@ -164,7 +175,7 @@ export function startExtras({ on, send, page }) {
   };
   let typed = "";
   document.addEventListener("keydown", (e) => {
-    if (e.target.closest("input, textarea, select, [contenteditable]") || e.key.length !== 1) return;
+    if (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]") || e.key.length !== 1) return;
     typed = (typed + e.key.toLowerCase()).slice(-12);
     for (const [word, fn] of Object.entries(SECRETS)) {
       if (typed.endsWith(word)) { typed = ""; fn(); }

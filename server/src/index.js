@@ -37,7 +37,7 @@ const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
 
 // Chaos
-const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam"];
+const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug"];
 const STICKERS = [
   "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
   "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
@@ -109,6 +109,19 @@ const JAM_BPM = [70, 160];
 const JAM_TOGGLE_GAP_MS = 60;
 const JAM_TEMPO_GAP_MS = 1500;
 // A starting groove, so the first visitor hears something: kick, snare, hat, clap, six notes, two bass.
+// Live polls: anyone can ask; everyone votes once (and can change their vote).
+const POLL_Q_MAX = 120;
+const POLL_OPTION_MAX = 40;
+const POLLS_OPEN = 3;                   // at most this many running at once
+const POLLS_KEPT = 12;                  // open and finished together
+const POLL_LIFE_MS = 30 * 60_000;
+const POLL_GAP_MS = 2 * 60_000;
+
+// Tug of war: red pulls left, blue pulls right; first to the end of the rope wins.
+const TUG_END = 40;
+const TUG_PULL_GAP_MS = 70;
+const TUG_SEND_GAP_MS = 80;
+
 const JAM_START = [0x1111, 0x1010, 0x5555, 0x0000, 0x0000, 0x0000, 0x0204, 0x0000, 0x2040, 0x0000, 0x8101, 0x0000];
 
 // ---- The Worker: checks the request, then hands it to the lobby --------------
@@ -135,7 +148,7 @@ export class Lobby extends DurableObject {
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
       const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId",
-                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam"];
+                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug"];
       for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
       const saved = await ctx.storage.get(keys);
 
@@ -155,6 +168,8 @@ export class Lobby extends DurableObject {
       this.notes = saved.get("notes") || [];
       this.lastHoldWin = saved.get("lastHoldWin") || 0;
       this.jam = saved.get("jam") || { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
+      this.polls = saved.get("polls") || [];
+      this.tug = saved.get("tug") || { pos: 0, red: 0, blue: 0 };
       // Magnets start scattered at random, then stay wherever people leave them.
       this.magnets = saved.get("magnets") || MAGNET_WORDS.map(() => [randomInt(10, 900), randomInt(10, 700)]);
 
@@ -217,6 +232,12 @@ export class Lobby extends DurableObject {
       case "time": return this.send(ws, { type: "time", t0: msg.t0, server: Date.now() });
       case "jam-toggle": return this.jamToggle(ws, me, msg);
       case "jam-tempo": return this.jamTempo(ws, me, msg);
+      case "since": return this.send(ws, this.sinceMessage(msg.t));
+      case "poll-create": return this.pollCreate(ws, me, msg);
+      case "poll-vote": return this.pollVote(me, msg);
+      case "poll-report": return this.pollReport(me, msg);
+      case "tug-join": return this.tugJoin(ws, me, msg);
+      case "tug-pull": return this.tugPull(ws, me);
       case "report-note": return this.reportNote(me, msg);
       case "admin": return this.admin(ws, me, msg);
     }
@@ -237,6 +258,7 @@ export class Lobby extends DurableObject {
     const me = ws.deserializeAttachment();
     if (me?.id && me.page) this.broadcastPage(me.page, { type: "cursor-gone", who: shortHash(me.id) }, ws);
     if (me?.holding) this.broadcastHolders(ws);
+    if (me?.page === "tug" && me.team) this.broadcastPage("tug", this.tugMessage(null, ws), ws);   // team sizes changed
   }
 
   async hello(ws, me, msg) {
@@ -259,6 +281,8 @@ export class Lobby extends DurableObject {
     if (me.page === "magnets") this.send(ws, { type: "magnets", words: MAGNET_WORDS, pos: this.magnets });
     if (me.page === "note") this.send(ws, this.noteFor(me.id));
     if (me.page === "jam") this.send(ws, this.jamMessage());
+    if (me.page === "home") this.send(ws, { type: "polls", list: this.publicPolls(me.id) });
+    if (me.page === "tug") this.send(ws, this.tugMessage());
     this.broadcast(this.paletteMessage());
     this.broadcastPresence();
     await this.count(`visit:${msg.page === "admin" ? "admin" : me.page || "other"}`, me.id);
@@ -301,13 +325,18 @@ export class Lobby extends DurableObject {
   // ---- Presence ---------------------------------------------------------------
 
   // Count people, not tabs: three tabs from one browser count once.
+  // Also counts people per page, for the Rooms menu ("Jam: 2 here").
   broadcastPresence(leaving) {
     const ids = new Set();
+    const perPage = {};
     for (const ws of this.ctx.getWebSockets()) {
-      const id = ws.deserializeAttachment()?.id;
-      if (ws !== leaving && id) ids.add(id);
+      const a = ws.deserializeAttachment();
+      if (ws === leaving || !a?.id) continue;
+      ids.add(a.id);
+      if (a.page) (perPage[a.page] ||= new Set()).add(a.id);
     }
-    this.broadcast({ type: "presence", count: ids.size }, leaving);
+    const pages = Object.fromEntries(Object.entries(perPage).map(([p, set]) => [p, set.size]));
+    this.broadcast({ type: "presence", count: ids.size, pages }, leaving);
   }
 
   // ---- Reactions --------------------------------------------------------------
@@ -676,7 +705,8 @@ export class Lobby extends DurableObject {
     if (now - (me.lastCursor || 0) < CURSOR_GAP_MS) return;
     me.lastCursor = now;
     ws.serializeAttachment(me);
-    this.broadcastPage(me.page, { type: "cursor", who: shortHash(me.id), x: msg.x, y: msg.y }, ws);
+    const name = clean(msg.name, NAME_MAX) || undefined;   // only sent if they chose to show it
+    this.broadcastPage(me.page, { type: "cursor", who: shortHash(me.id), x: msg.x, y: msg.y, name }, ws);
   }
 
   // ---- Hold together: a button that only works if several people hold it at once ------
@@ -759,6 +789,138 @@ export class Lobby extends DurableObject {
     if (!n || n.by === me.id || n.reports.includes(me.id)) return;
     n.reports.push(me.id);
     await this.ctx.storage.put("notes", this.notes);
+  }
+
+  // ---- While you were away: what changed since a given time -------------------------------
+
+  sinceMessage(t) {
+    if (!Number.isFinite(t) || t <= 0) return { type: "since", counts: {} };
+    const newer = (list) => list.filter((x) => x.at > t).length;
+    let stickers = 0;
+    let paint = 0;
+    for (const p of PAGES) {
+      stickers += newer(this.pages[p].stickers);
+      paint += newer([...this.pages[p].strokes.values()]);
+    }
+    const counts = {
+      shouts: newer(this.shouts.filter((s) => s.reports.length < REPORTS_TO_HIDE)),
+      stickers,
+      paint,
+      notes: newer(this.notes),
+      ideas: newer(this.suggestions),
+      polls: newer(this.polls),
+      chess: this.game.updatedAt > t && this.game.moves.length ? 1 : 0,
+    };
+    return { type: "since", counts };
+  }
+
+  // ---- Live polls -------------------------------------------------------------------------
+
+  publicPolls(viewer) {
+    const now = Date.now();
+    return this.polls
+      .filter((p) => p.reports.length < REPORTS_TO_HIDE)
+      .map((p) => ({
+        id: p.id, q: p.q, at: p.at, ends: p.ends, open: p.ends > now, mine: p.by === viewer,
+        options: p.options.map((o) => ({ text: o.text, votes: o.votes.length })),
+        voted: p.options.findIndex((o) => o.votes.includes(viewer)),
+      }));
+  }
+
+  async savePolls() {
+    await this.ctx.storage.put("polls", this.polls);
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment();
+      if (a?.id && a.page === "home") this.send(ws, { type: "polls", list: this.publicPolls(a.id) });
+    }
+  }
+
+  async pollCreate(ws, me, msg) {
+    const q = clean(msg.q, POLL_Q_MAX);
+    const options = (Array.isArray(msg.options) ? msg.options : []).map((o) => clean(o, POLL_OPTION_MAX)).filter(Boolean).slice(0, 4);
+    if (!q || options.length < 2 || new Set(options).size !== options.length) {
+      return this.send(ws, { type: "notice", about: "poll", text: "A poll needs a question and 2 to 4 different answers." });
+    }
+    const now = Date.now();
+    if (now - (me.lastPoll || 0) < POLL_GAP_MS) return this.send(ws, { type: "notice", about: "poll", text: "One new poll every two minutes." });
+    if (this.polls.filter((p) => p.ends > now).length >= POLLS_OPEN) {
+      return this.send(ws, { type: "notice", about: "poll", text: "Three polls are already running.  Wait for one to finish." });
+    }
+    me.lastPoll = now;
+    ws.serializeAttachment(me);
+    this.polls.push({ id: this.nextId++, by: me.id, q, at: now, ends: now + POLL_LIFE_MS, reports: [], options: options.map((text) => ({ text, votes: [] })) });
+    this.polls = this.polls.slice(-POLLS_KEPT);
+    await this.ctx.storage.put("nextId", this.nextId);
+    await this.count("poll");
+    await this.savePolls();
+  }
+
+  async pollVote(me, msg) {
+    const p = this.polls.find((p) => p.id === msg.id);
+    if (!p || p.ends <= Date.now() || !Number.isInteger(msg.i) || msg.i < 0 || msg.i >= p.options.length) return;
+    const had = p.options[msg.i].votes.includes(me.id);
+    for (const o of p.options) o.votes = o.votes.filter((v) => v !== me.id);
+    if (!had) p.options[msg.i].votes.push(me.id);       // tapping your own choice again takes the vote back
+    await this.count("poll-vote");
+    await this.savePolls();
+  }
+
+  async pollReport(me, msg) {
+    const p = this.polls.find((p) => p.id === msg.id);
+    if (!p || p.by === me.id || p.reports.includes(me.id)) return;
+    p.reports.push(me.id);
+    await this.savePolls();
+  }
+
+  // ---- Tug of war -------------------------------------------------------------------------
+
+  tugMessage(winner, leaving) {
+    const teams = { red: new Set(), blue: new Set() };
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment();
+      if (ws !== leaving && a?.id && a.page === "tug" && teams[a.team]) teams[a.team].add(a.id);
+    }
+    return { type: "tug", pos: this.tug.pos, end: TUG_END, wins: { red: this.tug.red, blue: this.tug.blue },
+             players: { red: teams.red.size, blue: teams.blue.size }, winner };
+  }
+
+  // Passes the rope's position on, at most every 80 ms, so a frenzy of pulls stays cheap.
+  sendTug(winner) {
+    const now = Date.now();
+    if (winner || now - (this.tugSentAt || 0) >= TUG_SEND_GAP_MS) {
+      this.tugSentAt = now;
+      clearTimeout(this.tugTimer);
+      this.tugTimer = null;
+      this.broadcastPage("tug", this.tugMessage(winner));
+    } else if (!this.tugTimer) {
+      this.tugTimer = setTimeout(() => { this.tugTimer = null; this.sendTug(); }, TUG_SEND_GAP_MS);
+    }
+  }
+
+  tugJoin(ws, me, msg) {
+    if (me.page !== "tug" || !["red", "blue"].includes(msg.team)) return;
+    me.team = msg.team;
+    ws.serializeAttachment(me);
+    this.sendTug(null);
+  }
+
+  async tugPull(ws, me) {
+    if (me.page !== "tug" || !me.team) return;
+    const now = Date.now();
+    if (now - (me.lastPull || 0) < TUG_PULL_GAP_MS) return;
+    me.lastPull = now;
+    ws.serializeAttachment(me);
+    this.tug.pos += me.team === "red" ? -1 : 1;
+    if (Math.abs(this.tug.pos) >= TUG_END) {
+      const winner = this.tug.pos < 0 ? "red" : "blue";
+      this.tug[winner] += 1;
+      this.tug.pos = 0;
+      await this.ctx.storage.put("tug", this.tug);
+      await this.count("tug-win");
+      return this.sendTug(winner);
+    }
+    if (Math.abs(this.tug.pos) % 5 === 0) await this.ctx.storage.put("tug", this.tug);   // save now and then
+    this.sendTug();
   }
 
   // ---- Jam: the shared music machine ------------------------------------------------------
@@ -959,6 +1121,15 @@ export class Lobby extends DurableObject {
         await this.ctx.storage.put("notes", this.notes);
         break;
       }
+      case "delete-poll":
+        this.polls = this.polls.filter((p) => p.id !== msg.id);
+        await this.savePolls();
+        break;
+      case "reset-tug":
+        this.tug = { pos: 0, red: 0, blue: 0 };
+        await this.ctx.storage.put("tug", this.tug);
+        this.sendTug(null);
+        break;
       case "reset-jam":
         this.jam = { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
         await this.ctx.storage.put("jam", this.jam);
@@ -1020,6 +1191,9 @@ export class Lobby extends DurableObject {
     return {
       shouts: this.shouts.map((s) => ({ id: s.id, name: s.name, text: s.text, at: s.at, reports: s.reports.length })),
       notes: this.notes.map((n) => ({ id: n.id, text: n.text, at: n.at, reports: n.reports.length })),
+      polls: this.polls.map((p) => ({ id: p.id, q: p.q, at: p.at, open: p.ends > Date.now(), reports: p.reports.length,
+                                      options: p.options.map((o) => `${o.text} (${o.votes.length})`) })),
+      tug: this.tug,
       visits: this.visits,
       suggestions: this.suggestions.map((s) => ({
         id: s.id, text: s.text, at: s.at, votes: s.votes.length, reports: s.reports.length, done: s.done,

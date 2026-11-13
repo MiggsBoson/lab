@@ -591,3 +591,108 @@ html.ev-comic body { font-family: "Comic Sans MS", "Comic Neue", "Chalkboard SE"
   html.ev-quake main, html.ev-quake .chaos-layer, .firefly { animation: none; }
   .balloon { animation-duration: 0s !important; }
 }
+
+/* ---- The 🧭 menu, command palette and toasts (menu.js) ----------------------------------- */
+
+.together-menu {
+  padding: 0.3rem 0.45rem;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+.together-menu[aria-expanded="true"] { background: var(--bg); }
+.together-menu:hover { filter: none; }
+@media (max-width: 400px) {
+  .together-emojis button:nth-child(n + 5) { display: none; }   /* room for the menu buttons */
+}
+
+.menu-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 4.25rem;
+  z-index: 12;
+  width: min(24rem, calc(100% - 1.5rem));
+  max-height: 70vh;
+  overflow: auto;
+  padding: 0.85rem 1rem;
+  transform: translateX(-50%);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.18);
+  font-size: 0.92rem;
+}
+.menu-heading { margin: 0.25rem 0 0.4rem; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.menu-heading:not(:first-child) { margin-top: 0.9rem; }
+.rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.15rem; }
+.rooms li { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.rooms a { padding: 0.25rem 0; text-decoration: none; color: var(--fg); }
+.rooms a[aria-current="page"] { font-weight: 700; }
+.room-count { color: var(--muted); font-size: 0.8rem; }
+.room-count.live::before { content: "● "; color: var(--live); }
+.menu-switch { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+.menu-panel input[type="text"] { margin-bottom: 0.2rem; }
+.menu-actions { margin-top: 0.8rem; }
+.menu-tip { margin: 0.6rem 0 0; font-size: 0.8rem; }
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+  background: rgb(0 0 0 / 0.35);
+}
+.palette {
+  width: min(32rem, calc(100% - 1.5rem));
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.3);
+}
+.palette input[type="text"] { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 0.85rem 1rem; font-size: 1.05rem; background: var(--card); }
+.palette input[type="text"]:focus-visible { outline: none; }
+.palette-list { list-style: none; margin: 0; padding: 0.35rem; max-height: 50vh; overflow: auto; }
+.palette-list li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0.65rem; border-radius: 8px; cursor: pointer; }
+.palette-list li[aria-selected="true"] { background: var(--bg); outline: 1px solid var(--accent); }
+.palette-hint { color: var(--muted); font-size: 0.85rem; }
+
+.toasts { position: fixed; left: 0.75rem; bottom: 4.5rem; z-index: 14; display: grid; gap: 0.5rem; max-width: min(22rem, calc(100% - 1.5rem)); }
+.toast {
+  position: relative;
+  padding: 0.65rem 2rem 0.65rem 0.85rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.18);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.toast-close { position: absolute; top: 0.3rem; right: 0.3rem; padding: 0.1rem 0.35rem; border: 0; background: none; color: var(--muted); }
+.toast-close:hover { filter: none; color: var(--fg); }
+.digest { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+
+.ghost-cursor .ghost-name {
+  margin-left: 0.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 0.7rem;
+  vertical-align: middle;
+}
+.ghost-cursor .ghost-name:empty { display: none; }
+
+/* Calm mode: as little motion as possible. */
+html.calm *, html.calm *::before, html.calm *::after {
+  animation-duration: 0.001s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001s !important;
+  scroll-behavior: auto !important;
+}
