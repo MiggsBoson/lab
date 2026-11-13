@@ -14,6 +14,12 @@ const TEXT = {
   ghost: "👻 A ghost is wandering about.  Catch it!",
   treasure: "🗝️ A golden key is hidden somewhere on the lab",
   paintparty: "🎨 Paint party: unlimited ink (🎨 at the bottom)",
+  earthquake: "🌋 Earthquake!",
+  mirror: "🪞 Through the looking glass",
+  balloons: "🎈 Balloons!  Pop them",
+  tiny: "🔬 Everything shrank",
+  comic: "✍️ Someone changed the font",
+  fireflies: "✨ Fireflies are out",
 };
 
 export function startEvents({ on, send, page }) {
@@ -246,7 +252,62 @@ export function startEvents({ on, send, page }) {
     paintparty() {
       return null;   // chaos.js lifts the ink limit; the banner says so
     },
+
+    earthquake: () => classFor("ev-quake"),
+    mirror: () => classFor("ev-mirror"),
+    tiny: () => classFor("ev-tiny"),
+    comic: () => classFor("ev-comic"),
+
+    // Balloons rise from the bottom; tap one to pop it (and everyone sees a 🎉).
+    balloons(e) {
+      const rand = seeded(e.seed);
+      const box = make("div", "event-balloons");
+      document.body.append(box);
+      const colours = ["#e63946", "#f4a261", "#2a9d8f", "#3a86ff", "#8338ec", "#ffbe0b"];
+      let made = 0;
+      const timer = setInterval(() => {
+        if (made++ > 40) return clearInterval(timer);
+        const b = make("button", "balloon");
+        b.type = "button";
+        b.setAttribute("aria-label", "A balloon.  Pop it");
+        b.style.left = `${5 + rand() * 85}%`;
+        b.style.setProperty("--c", colours[Math.floor(rand() * colours.length)]);
+        b.style.animationDuration = `${7 + rand() * 5}s`;
+        b.addEventListener("click", () => {
+          b.classList.add("popped");
+          b.textContent = "💥";
+          send({ type: "react", emoji: "🎉" });
+          setTimeout(() => b.remove(), 300);
+        });
+        b.addEventListener("animationend", () => b.remove());
+        box.append(b);
+      }, 400);
+      return () => { clearInterval(timer); box.remove(); };
+    },
+
+    // Glowing dots wander slowly; the page dims a little so they show.
+    fireflies(e) {
+      const rand = seeded(e.seed);
+      const box = make("div", "event-fireflies");
+      box.setAttribute("aria-hidden", "true");
+      for (let i = 0; i < 28; i++) {
+        const f = make("span", "firefly");
+        f.style.left = `${rand() * 100}%`;
+        f.style.top = `${rand() * 100}%`;
+        f.style.animationDelay = `${-rand() * 10}s, ${-rand() * 3}s`;
+        f.style.animationDuration = `${8 + rand() * 10}s, ${1.5 + rand() * 2}s`;
+        box.append(f);
+      }
+      document.body.append(box);
+      return () => box.remove();
+    },
   };
+
+  // Many effects are just a class on <html> while the event lasts.
+  function classFor(name) {
+    document.documentElement.classList.add(name);
+    return () => document.documentElement.classList.remove(name);
+  }
 }
 
 // ---- Small helpers -------------------------------------------------------------------------

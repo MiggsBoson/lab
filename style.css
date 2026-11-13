@@ -454,3 +454,140 @@ html.ev-disco body::before {
   html.ev-gravity main :is(.card, .experiments a, h1, .lede, .board, #status, footer) { transition: none; }
 }
 .event-key:active { transform: translate(-50%, -50%); }
+
+/* ---- Extras (extras.js): ghost cursors, echoes, Dublin's real weather, secrets -------------- */
+
+.ghost-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 7;
+  margin: -0.4rem 0 0 -0.4rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0.8;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.35));
+  transition: transform 0.12s linear, opacity 1.5s;
+}
+.ghost-cursor.faded { opacity: 0.2; }
+
+.echo {
+  position: fixed;
+  left: 100%;
+  z-index: 6;
+  max-width: 80vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+  font-size: 1.05rem;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 0.55;
+  animation: echo-drift 26s linear forwards;
+}
+.echo.still { left: 50%; translate: -50% 0; animation: together-fade 9s ease-in forwards; }
+@keyframes echo-drift { to { translate: calc(-100vw - 100%) 0; } }
+
+.real-sky { position: fixed; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+.real-sky.night { background: linear-gradient(rgb(10 15 40 / 0.28), rgb(10 15 40 / 0.08) 45%, transparent 70%); }
+.real-sky.fog { backdrop-filter: blur(0.6px); background: linear-gradient(transparent, rgb(220 225 230 / 0.35)); }
+.real-sky.flash { background: rgb(255 255 255 / 0.55); }
+.real-sky .drop {
+  position: absolute;
+  top: -10vh;
+  width: 1px;
+  height: 9vh;
+  background: linear-gradient(transparent, rgb(140 170 220 / 0.55));
+  rotate: 12deg;
+  animation: rain-fall linear infinite;
+}
+.real-sky.windy .drop { rotate: 28deg; }
+.real-sky .flurry {
+  position: absolute;
+  top: -2vh;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.85);
+  animation: rain-fall linear infinite;
+}
+@keyframes rain-fall { to { translate: -6vw 115vh; } }
+.real-sky .star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px #fff;
+  animation: twinkle 4s ease-in-out infinite;
+}
+@keyframes twinkle { 50% { opacity: 0.15; } }
+
+main.secret-spin { animation: secret-spin 1.4s cubic-bezier(0.6, 0, 0.3, 1); }
+@keyframes secret-spin { to { rotate: 360deg; } }
+html.secret-sink main > * { translate: 0 18px; rotate: 1.5deg; transition: translate 3s, rotate 3s; }
+
+/* ---- The newer surprises --------------------------------------------------------------------- */
+
+html.ev-quake main, html.ev-quake .chaos-layer { animation: ev-quake 0.18s linear infinite; }
+@keyframes ev-quake {
+  25% { translate: -5px 3px; rotate: -0.6deg; }
+  50% { translate: 4px -4px; rotate: 0.5deg; }
+  75% { translate: -3px -2px; rotate: 0.3deg; }
+}
+html.ev-mirror main { scale: -1 1; transition: scale 1s; }
+html.ev-mirror .chaos-layer { visibility: hidden; }
+html.ev-tiny main { scale: 0.55; transform-origin: 50% 0; transition: scale 1.2s cubic-bezier(0.5, 0, 0.3, 1.4); }
+html.ev-tiny .chaos-layer { visibility: hidden; }
+html.ev-comic body { font-family: "Comic Sans MS", "Comic Neue", "Chalkboard SE", cursive; }
+
+.event-balloons { position: fixed; inset: 0; z-index: 8; overflow: hidden; pointer-events: none; }
+.balloon {
+  position: absolute;
+  bottom: -6rem;
+  width: 3rem;
+  height: 3.8rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50% 50% 48% 48% / 55% 55% 45% 45%;
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.55), transparent 32%), var(--c);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: balloon-rise linear forwards;
+}
+.balloon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 2.5rem;
+  background: rgb(0 0 0 / 0.35);
+}
+.balloon:hover { filter: none; }
+.balloon.popped { background: none; font-size: 2rem; animation-play-state: paused; }
+.balloon.popped::after { display: none; }
+@keyframes balloon-rise { to { translate: 0 calc(-100vh - 10rem); rotate: 8deg; } }
+
+.event-fireflies { position: fixed; inset: 0; z-index: 7; pointer-events: none; background: rgb(0 0 20 / 0.22); }
+.firefly {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f6ff8a;
+  box-shadow: 0 0 10px 3px rgb(240 255 120 / 0.8);
+  animation: firefly-wander ease-in-out infinite alternate, twinkle ease-in-out infinite;
+}
+@keyframes firefly-wander {
+  33% { translate: 8vw -6vh; }
+  66% { translate: -5vw 7vh; }
+  to { translate: 6vw 4vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.ev-quake main, html.ev-quake .chaos-layer, .firefly { animation: none; }
+  .balloon { animation-duration: 0s !important; }
+}

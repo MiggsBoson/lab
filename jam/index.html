@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jam · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    /* Styles only this page needs. */
+    .jam-top { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0 0 0.75rem; }
+    #join { font-size: 1.05rem; padding: 0.6rem 1.1rem; }
+    #tempo { width: 9rem; accent-color: var(--accent); }
+    #viz { display: block; width: 100%; height: 70px; margin: 0 0 0.5rem; border-radius: 8px; background: var(--bg); }
+
+    .jam-grid { display: grid; gap: 3px; user-select: none; touch-action: manipulation; }
+    .jam-row { display: grid; grid-template-columns: 1.8rem repeat(16, 1fr); gap: 3px; align-items: center; }
+    .jam-row.gap { margin-top: 6px; }
+    .jam-label { font-size: 1rem; text-align: center; line-height: 1; }
+    .cell {
+      position: relative;
+      aspect-ratio: 1;
+      min-width: 0;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--card);
+      transition: background 0.08s, transform 0.08s;
+    }
+    .cell:nth-child(4n + 2) { border-left-color: var(--muted); }          /* the start of each beat */
+    .cell:hover { filter: none; border-color: var(--accent); }
+    .cell[aria-pressed="true"] { background: var(--row); border-color: transparent; }
+    .cell.now { box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.6); }
+    .cell.now[aria-pressed="true"] { transform: scale(1.12); filter: brightness(1.35); }
+    .cell.remote::after {
+      content: "";
+      position: absolute;
+      inset: -4px;
+      border-radius: 6px;
+      border: 2px solid var(--row);
+      animation: jam-ping 0.8s ease-out forwards;
+    }
+    @keyframes jam-ping { to { inset: -12px; opacity: 0; } }
+    .drums { --row: #3a86ff; }
+    .notes { --row: #f4a261; }
+    .bass { --row: #8338ec; }
+    .playhead { display: grid; grid-template-columns: 1.8rem repeat(16, 1fr); gap: 3px; margin-top: 4px; }
+    .playhead span { height: 4px; border-radius: 2px; background: var(--border); }
+    .playhead span.now { background: var(--accent); }
+    @media (prefers-reduced-motion: reduce) { .cell { transition: none; } .cell.remote::after { animation: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Jam</h1>
+    <p class="lede">One beat for everyone.  Tap squares to change it; everyone hears the same loop at the same moment.</p>
+
+    <section class="card">
+      <div class="jam-top">
+        <button id="join">▶ Join the jam (sound on)</button>
+        <label class="muted">Tempo <input id="tempo" type="range" min="70" max="160" step="1"> <span id="bpm">–</span> bpm</label>
+      </div>
+      <canvas id="viz" aria-hidden="true"></canvas>
+      <div id="grid" class="jam-grid no-wear" role="group" aria-label="The beat: 12 sounds by 16 steps"></div>
+      <div id="playhead" class="playhead" aria-hidden="true"></div>
+      <p id="status" class="muted" aria-live="polite" style="margin-top: 0.75rem;">Connecting…</p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+
+    const $ = (id) => document.getElementById(id);
+
+    // The 12 rows: four drums, six notes of a pentatonic scale (any mix sounds fine), two bass.
+    const ROWS = [
+      { label: "🥁", name: "kick", kind: "kick", group: "drums" },
+      { label: "🪘", name: "snare", kind: "snare", group: "drums" },
+      { label: "🎩", name: "hi-hat", kind: "hat", group: "drums" },
+      { label: "👏", name: "clap", kind: "clap", group: "drums" },
+      { label: "C", name: "high C", kind: "pluck", freq: 523.25, group: "notes" },
+      { label: "A", name: "A", kind: "pluck", freq: 440.0, group: "notes" },
+      { label: "G", name: "G", kind: "pluck", freq: 392.0, group: "notes" },
+      { label: "E", name: "E", kind: "pluck", freq: 329.63, group: "notes" },
+      { label: "D", name: "D", kind: "pluck", freq: 293.66, group: "notes" },
+      { label: "c", name: "low C", kind: "pluck", freq: 261.63, group: "notes" },
+      { label: "🎸", name: "bass G", kind: "bass", freq: 98.0, group: "bass" },
+      { label: "🎸", name: "bass C", kind: "bass", freq: 65.41, group: "bass" },
+    ];
+    const STEPS = 16;
+
+    let jam = null;          // { bpm, epoch, grid } from the server
+    let offset = 0;          // server clock minus ours, in ms
+    let bestRtt = Infinity;
+    let people = 1;
+
+    // ---- The grid --------------------------------------------------------------------
+
+    const cells = ROWS.map((row, r) => {
+      const line = document.createElement("div");
+      line.className = `jam-row ${row.group}` + (r === 4 || r === 10 ? " gap" : "");
+      const label = document.createElement("span");
+      label.className = "jam-label";
+      label.textContent = row.label;
+      label.title = row.name;
+      line.append(label);
+      const buttons = [];
+      for (let c = 0; c < STEPS; c++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cell";
+        b.setAttribute("aria-pressed", "false");
+        b.setAttribute("aria-label", `${row.name}, step ${c + 1}`);
+        b.addEventListener("click", () => toggle(r, c));
+        line.append(b);
+        buttons.push(b);
+      }
+      $("grid").append(line);
+      return buttons;
+    });
+    const heads = [document.createElement("span")];   // a spacer under the labels
+    for (let c = 0; c < STEPS; c++) heads.push(document.createElement("span"));
+    $("playhead").append(...heads);
+
+    const isOn = (r, c) => Boolean(jam && jam.grid[r] & (1 << c));
+
+    function showGrid() {
+      for (let r = 0; r < ROWS.length; r++) {
+        for (let c = 0; c < STEPS; c++) cells[r][c].setAttribute("aria-pressed", isOn(r, c));
+      }
+    }
+
+    function toggle(r, c) {
+      if (!jam) return;
+      jam.grid[r] ^= 1 << c;                   // show it straight away; the server confirms
+      cells[r][c].setAttribute("aria-pressed", isOn(r, c));
+      if (isOn(r, c) && audio) play(r, audio.currentTime);   // a taste of the sound
+      send({ type: "jam-toggle", r, c });
+    }
+
+    // ---- Keeping time with everyone ------------------------------------------------------
+    // Ask the server for its clock a few times and keep the answer with the shortest round
+    // trip: half of that round trip is the best guess for how late the answer arrived.
+
+    function syncClock() {
+      for (let i = 0; i < 5; i++) setTimeout(() => send({ type: "time", t0: Date.now() }), i * 250);
+    }
+    on("time", (msg) => {
+      const rtt = Date.now() - msg.t0;
+      if (rtt <= bestRtt + 5) {
+        bestRtt = Math.min(bestRtt, rtt);
+        offset = msg.server + rtt / 2 - Date.now();
+      }
+    });
+    on("open", () => { bestRtt = Infinity; syncClock(); });
+    setInterval(() => { bestRtt += 20; syncClock(); }, 30_000);   // drift happens; check again
+    const serverNow = () => Date.now() + offset;
+    const stepMs = () => 60_000 / jam.bpm / 4;
+
+    on("jam", (msg) => {
+      jam = { bpm: msg.bpm, epoch: msg.epoch, grid: msg.grid };
+      if (bestRtt === Infinity) offset = msg.now - Date.now();   // rough, until the sync answers
+      $("tempo").value = jam.bpm;
+      $("bpm").textContent = jam.bpm;
+      nextStep = null;
+      showGrid();
+      showStatus();
+    });
+    on("jam-cell", (msg) => {
+      if (!jam) return;
+      const was = isOn(msg.r, msg.c);
+      if (msg.on) jam.grid[msg.r] |= 1 << msg.c; else jam.grid[msg.r] &= ~(1 << msg.c);
+      const b = cells[msg.r][msg.c];
+      b.setAttribute("aria-pressed", msg.on);
+      if (was !== msg.on) {                    // someone else changed it: a little ping
+        b.classList.remove("remote");
+        void b.offsetWidth;
+        b.classList.add("remote");
+      }
+    });
+    on("presence", (msg) => { people = msg.count; showStatus(); });
+
+    let lastTempo = 0;
+    $("tempo").addEventListener("input", () => { $("bpm").textContent = $("tempo").value; });
+    $("tempo").addEventListener("change", () => {
+      if (Date.now() - lastTempo < 1500) return;
+      lastTempo = Date.now();
+      send({ type: "jam-tempo", bpm: Number($("tempo").value) });
+    });
+
+    function showStatus() {
+      if (!jam) return;
+      const others = people - 1;
+      $("status").textContent = (playing() ? "🔊 Playing. " : "🔇 Sound is off. ") +
+        (others > 0 ? `${others} other${others === 1 ? " is" : "s are"} on the lab right now.` : "Share the link and jam with someone.");
+    }
+
+    // ---- Sound: every instrument is made from oscillators and noise -------------------------
+
+    let audio = null;
+    let out = null;
+    let analyser = null;
+    let echo = null;
+    let noise = null;
+
+    function startAudio() {
+      audio = new AudioContext();
+      const master = audio.createGain();
+      master.gain.value = 0.75;
+      const squash = audio.createDynamicsCompressor();   // keeps a busy grid from clipping
+      analyser = audio.createAnalyser();
+      analyser.fftSize = 256;
+      master.connect(squash).connect(analyser).connect(audio.destination);
+      out = master;
+
+      // A dotted-eighth echo for the plucked notes, darkening as it repeats.
+      const delay = audio.createDelay(2);
+      const feedback = audio.createGain();
+      const tone = audio.createBiquadFilter();
+      delay.delayTime.value = jam ? (stepMs() * 3) / 1000 : 0.4;
+      feedback.gain.value = 0.32;
+      tone.type = "lowpass";
+      tone.frequency.value = 2200;
+      delay.connect(tone).connect(feedback).connect(delay);
+      tone.connect(master);
+      echo = delay;
+
+      // One second of white noise, reused by the snare, hat and clap.
+      noise = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
+      const data = noise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+
+    // A gain that jumps up and fades out: the shape of almost every drum hit.
+    function envelope(t, peak, length) {
+      const g = audio.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + length);
+      return g;
+    }
+
+    function noiseBurst(t, filterType, freq, peak, length, q = 1) {
+      const src = audio.createBufferSource();
+      src.buffer = noise;
+      const f = audio.createBiquadFilter();
+      f.type = filterType;
+      f.frequency.value = freq;
+      f.Q.value = q;
+      const g = envelope(t, peak, length);
+      src.connect(f).connect(g).connect(out);
+      src.start(t, Math.random() * 0.5);
+      src.stop(t + length + 0.05);
+    }
+
+    const SOUNDS = {
+      kick(t) {                                   // a sine wave dropping fast in pitch
+        const o = audio.createOscillator();
+        o.frequency.setValueAtTime(160, t);
+        o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+        const g = envelope(t, 1, 0.45);
+        o.connect(g).connect(out);
+        o.start(t);
+        o.stop(t + 0.5);
+      },
+      snare(t) {                                  // noise for the rattle, a short tone for the body
+        noiseBurst(t, "highpass", 1400, 0.55, 0.18);
+        const o = audio.createOscillator();
+        o.type = "triangle";
+        o.frequency.setValueAtTime(220, t);
+        o.frequency.exponentialRampToValueAtTime(150, t + 0.08);
+        const g = envelope(t, 0.35, 0.1);
+        o.connect(g).connect(out);
+        o.start(t);
+        o.stop(t + 0.15);
+      },
+      hat(t) { noiseBurst(t, "highpass", 7500, 0.22, 0.05); },
+      clap(t) {                                   // three quick slaps and a short tail
+        for (const d of [0, 0.011, 0.023]) noiseBurst(t + d, "bandpass", 1600, 0.5, 0.03, 1.4);
+        noiseBurst(t + 0.03, "bandpass", 1500, 0.35, 0.16, 1.2);
+      },
+      pluck(t, freq) {                            // two detuned saws through a closing filter
+        const f = audio.createBiquadFilter();
+        f.type = "lowpass";
+        f.Q.value = 4;
+        f.frequency.setValueAtTime(3200, t);
+        f.frequency.exponentialRampToValueAtTime(500, t + 0.35);
+        const g = envelope(t, 0.16, 0.6);
+        for (const detune of [-7, 7]) {
+          const o = audio.createOscillator();
+          o.type = "sawtooth";
+          o.frequency.value = freq;
+          o.detune.value = detune;
+          o.connect(f);
+          o.start(t);
+          o.stop(t + 0.65);
+        }
+        f.connect(g);
+        g.connect(out);
+        g.connect(echo);
+      },
+      bass(t, freq) {
+        const o = audio.createOscillator();
+        o.type = "sawtooth";
+        o.frequency.value = freq;
+        const f = audio.createBiquadFilter();
+        f.type = "lowpass";
+        f.frequency.setValueAtTime(900, t);
+        f.frequency.exponentialRampToValueAtTime(180, t + 0.3);
+        const g = envelope(t, 0.5, 0.38);
+        o.connect(f).connect(g).connect(out);
+        o.start(t);
+        o.stop(t + 0.42);
+      },
+    };
+
+    function play(r, t) {
+      const row = ROWS[r];
+      SOUNDS[row.kind](t, row.freq);
+    }
+
+    // ---- The scheduler -----------------------------------------------------------------------
+    // Every 25 ms, look 150 ms ahead and book every step that falls in that window on the
+    // audio clock.  Booking ahead is what keeps the timing tight even if the page is busy.
+
+    let nextStep = null;   // the next step (counted from the shared epoch) still to book
+    setInterval(() => {
+      if (!jam || !audio || audio.state !== "running") return;
+      const ms = stepMs();
+      const now = serverNow();
+      if (nextStep === null) nextStep = Math.ceil((now - jam.epoch) / ms);
+      while (jam.epoch + nextStep * ms < now + 150) {
+        const at = audio.currentTime + (jam.epoch + nextStep * ms - serverNow()) / 1000;
+        const col = ((nextStep % STEPS) + STEPS) % STEPS;
+        if (at > audio.currentTime - 0.02) {
+          for (let r = 0; r < ROWS.length; r++) if (isOn(r, col)) play(r, Math.max(at, audio.currentTime));
+        }
+        nextStep++;
+      }
+      echo.delayTime.setTargetAtTime((ms * 3) / 1000, audio.currentTime, 0.1);
+    }, 25);
+
+    const playing = () => Boolean(audio && audio.state === "running");
+
+    // The first tap makes the sound (browsers only allow that after a tap); later taps toggle it.
+    $("join").addEventListener("click", async () => {
+      const first = !audio;
+      if (first) startAudio();
+      if (!first && playing()) {
+        await audio.suspend();
+        $("join").textContent = "▶ Sound on";
+      } else {
+        await audio.resume();
+        nextStep = null;
+        $("join").textContent = "⏸ Sound off";
+      }
+      showStatus();
+    });
+
+    // ---- Playhead and visualiser ---------------------------------------------------------------
+
+    const viz = $("viz");
+    const g = viz.getContext("2d");
+    let shown = -1;
+    function frame() {
+      requestAnimationFrame(frame);
+      if (!jam) return;
+      // What you see lines up with what you hear: allow for the sound card's delay.
+      const latency = audio ? (audio.outputLatency || audio.baseLatency || 0) * 1000 : 0;
+      const col = ((Math.floor((serverNow() - jam.epoch - latency) / stepMs()) % STEPS) + STEPS) % STEPS;
+      if (col !== shown) {
+        if (shown >= 0) { for (const row of cells) row[shown].classList.remove("now"); heads[shown + 1].classList.remove("now"); }
+        for (const row of cells) row[col].classList.add("now");
+        heads[col + 1].classList.add("now");
+        shown = col;
+      }
+
+      const w = (viz.width = viz.clientWidth * devicePixelRatio);
+      const h = (viz.height = viz.clientHeight * devicePixelRatio);
+      g.clearRect(0, 0, w, h);
+      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent");
+      if (analyser && audio.state === "running") {
+        const bins = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(bins);
+        const n = 48;
+        const bw = w / n;
+        for (let i = 0; i < n; i++) {
+          const v = bins[Math.floor((i / n) ** 1.6 * bins.length * 0.85)] / 255;   // more room for the lows
+          const bh = Math.max(2, v * h * 0.95);
+          g.fillStyle = accent;
+          g.globalAlpha = 0.35 + v * 0.65;
+          g.fillRect(i * bw + 1, h - bh, bw - 2, bh);
+        }
+        g.globalAlpha = 1;
+      } else {
+        // Silent: a gentle wave that moves with the beat, so the page still breathes.
+        const phase = ((serverNow() - jam.epoch) / stepMs() / 4) * Math.PI * 2;
+        g.strokeStyle = accent;
+        g.globalAlpha = 0.5;
+        g.lineWidth = 2 * devicePixelRatio;
+        g.beginPath();
+        for (let x = 0; x <= w; x += 4) {
+          const y = h / 2 + Math.sin(x / 40 + phase) * h * 0.18 * (0.6 + 0.4 * Math.sin(phase / 2));
+          if (x === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        }
+        g.stroke();
+        g.globalAlpha = 1;
+      }
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

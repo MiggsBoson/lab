@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fridge magnets · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    /* Styles only this page needs. */
+    .fridge {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      border-radius: 14px;
+      background: linear-gradient(160deg, #f4f6f7, #d6dce1);
+      box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12), inset 0 -40px 80px rgb(0 0 0 / 0.07);
+      touch-action: none;
+    }
+    @media (prefers-color-scheme: dark) { .fridge { background: linear-gradient(160deg, #3a3f45, #23272b); } }
+    .fridge::before {                        /* the handle */
+      content: "";
+      position: absolute;
+      right: 2.5%;
+      top: 8%;
+      width: 1.4%;
+      height: 30%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #b9c0c6, #eef1f3, #a9b1b7);
+      box-shadow: 0 2px 4px rgb(0 0 0 / 0.25);
+    }
+    .magnet {
+      position: absolute;
+      padding: 0.05em 0.35em 0.1em;
+      border: 0;
+      border-radius: 1px;
+      background: #fffdf7;
+      color: #161616;
+      font: 600 clamp(0.62rem, 2.1vw, 0.95rem) / 1.3 Georgia, "Times New Roman", serif;
+      white-space: nowrap;
+      box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+      cursor: grab;
+      user-select: none;
+      rotate: var(--r, 0deg);
+      transition: left 0.15s linear, top 0.15s linear;
+    }
+    .magnet:hover { filter: none; }
+    .magnet:active { transform: none; }
+    .magnet.dragging { z-index: 2; cursor: grabbing; transition: none; box-shadow: 0 8px 16px rgb(0 0 0 / 0.35); scale: 1.08; }
+    .magnet.theirs { box-shadow: 0 0 0 2px var(--accent), 0 6px 12px rgb(0 0 0 / 0.3); z-index: 1; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Fridge magnets</h1>
+    <p class="lede">One fridge door for everyone.  Drag the words into sentences; whatever you make stays for the next person to find.</p>
+    <div id="fridge" class="fridge no-wear" aria-label="A fridge door covered in word magnets"></div>
+    <p id="status" class="muted" aria-live="polite" style="margin-top: 0.75rem;">Connecting…</p>
+    <p class="muted">Keyboard: Tab to a word, then move it with the arrow keys.</p>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+
+    const fridge = document.getElementById("fridge");
+    const W = 1000, H = 750;            // the fridge in "units"; the server keeps x 0-960, y 0-720
+    let words = [];
+    let pos = [];
+    let tiles = [];
+
+    const place = (i) => {
+      tiles[i].style.left = `${(pos[i][0] / W) * 100}%`;
+      tiles[i].style.top = `${(pos[i][1] / H) * 100}%`;
+    };
+    const clampX = (x) => Math.max(0, Math.min(960, Math.round(x)));
+    const clampY = (y) => Math.max(0, Math.min(720, Math.round(y)));
+
+    on("magnets", (msg) => {
+      words = msg.words;
+      pos = msg.pos.map((p) => [...p]);
+      fridge.replaceChildren();
+      tiles = words.map((word, i) => {
+        const t = document.createElement("button");
+        t.type = "button";
+        t.className = "magnet";
+        t.textContent = word;
+        t.style.setProperty("--r", `${((i * 37) % 9) - 4}deg`);   // every magnet a bit crooked
+        t.setAttribute("aria-label", `Magnet: ${word}`);
+        fridge.append(t);
+        return t;
+      });
+      words.forEach((_, i) => place(i));
+      document.getElementById("status").textContent = `${words.length} magnets.  Everyone sees them move.`;
+    });
+
+    // Someone else is moving a magnet: follow it, and outline it for a moment.
+    const outlined = new Map();
+    on("magnet", (msg) => {
+      if (!tiles[msg.i] || dragging === msg.i) return;
+      pos[msg.i] = [msg.x, msg.y];
+      place(msg.i);
+      tiles[msg.i].classList.add("theirs");
+      clearTimeout(outlined.get(msg.i));
+      outlined.set(msg.i, setTimeout(() => tiles[msg.i].classList.remove("theirs"), 700));
+    });
+
+    // ---- Dragging ---------------------------------------------------------------------
+
+    let dragging = -1;
+    let grab = [0, 0];        // where on the magnet you picked it up, in units
+    let lastSend = 0;
+
+    function units(e) {
+      const r = fridge.getBoundingClientRect();
+      return [((e.clientX - r.left) / r.width) * W, ((e.clientY - r.top) / r.height) * H];
+    }
+
+    fridge.addEventListener("pointerdown", (e) => {
+      const i = tiles.indexOf(e.target);
+      if (i < 0) return;
+      e.preventDefault();
+      dragging = i;
+      const [ux, uy] = units(e);
+      grab = [ux - pos[i][0], uy - pos[i][1]];
+      tiles[i].classList.add("dragging");
+      try { fridge.setPointerCapture(e.pointerId); } catch {}
+    });
+    fridge.addEventListener("pointermove", (e) => {
+      if (dragging < 0) return;
+      const [ux, uy] = units(e);
+      pos[dragging] = [clampX(ux - grab[0]), clampY(uy - grab[1])];
+      place(dragging);
+      if (Date.now() - lastSend > 50) {
+        lastSend = Date.now();
+        send({ type: "magnet", i: dragging, x: pos[dragging][0], y: pos[dragging][1] });
+      }
+    });
+    const drop = () => {
+      if (dragging < 0) return;
+      const i = dragging;
+      tiles[i].classList.remove("dragging");
+      send({ type: "magnet", i, x: pos[i][0], y: pos[i][1], drop: true });
+      dragging = -1;
+    };
+    fridge.addEventListener("pointerup", drop);
+    fridge.addEventListener("pointercancel", drop);
+
+    // Arrow keys move the focused magnet, so it works without a mouse too.
+    fridge.addEventListener("keydown", (e) => {
+      const i = tiles.indexOf(document.activeElement);
+      const step = e.shiftKey ? 40 : 10;
+      const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+      if (i < 0 || !move) return;
+      e.preventDefault();
+      pos[i] = [clampX(pos[i][0] + move[0]), clampY(pos[i][1] + move[1])];
+      place(i);
+      send({ type: "magnet", i, x: pos[i][0], y: pos[i][1], drop: true });
+    });
+  </script>
+</body>
+</html>

@@ -219,7 +219,7 @@ export function startChaos({ on, send, page, bar }) {
 
   function applyWear() {
     for (const el of main.querySelectorAll("a, button")) {
-      if (el.closest("#board")) continue;
+      if (el.closest("#board, .no-wear")) continue;   // grids stay straight
       const n = wear.keys[wearKey(el)] || 0;
       if (!n) { el.classList.remove("worn"); continue; }
       el.classList.add("worn");
@@ -486,7 +486,7 @@ export function startChaos({ on, send, page, bar }) {
     if (mode !== "look" || !e.isTrusted || e.target.closest(".together, .chaos-tray")) return;
     const [x, y] = toUnits(e.clientX, e.clientY);
     const target = e.target.closest("a, button");
-    const key = target && main.contains(target) && !target.closest("#board") ? wearKey(target) : "";
+    const key = target && main.contains(target) && !target.closest("#board, .no-wear") ? wearKey(target) : "";
     if (clicks.length < 30) clicks.push([x, y, key]);
   }, true);
 

@@ -37,7 +37,7 @@ const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
 
 // Chaos
-const PAGES = ["home", "chess", "live", "playground", "hello"];
+const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam"];
 const STICKERS = [
   "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
   "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
@@ -65,11 +65,51 @@ const SUGGEST_GAP_MS = 60_000;
 
 // Surprise events: how long each lasts.  A new one is due 15 to 45 minutes after the
 // last one ends; it starts then if someone is on the site, or when the next person arrives.
-const EVENTS = { snow: 6, gravity: 4, flip: 2, disco: 3, dark: 4, ghost: 8, treasure: 15, paintparty: 10 };
+const EVENTS = {
+  snow: 6, gravity: 4, flip: 2, disco: 3, dark: 4, ghost: 8, treasure: 15, paintparty: 10,
+  earthquake: 1, mirror: 2, balloons: 3, tiny: 2, comic: 5, fireflies: 6,
+};
 const EVENT_GAP_MINUTES = [15, 45];
 
 // Usage counts are kept per day, for this many days.
 const STATS_DAYS = 60;
+
+// Ghost cursors: how often each visitor's pointer position is passed on.
+const CURSOR_GAP_MS = 90;
+
+// The hold-together button: this many people holding at once sets off a surprise.
+const HOLD_NEEDED = 3;
+const HOLD_COOLDOWN_MS = 3 * 60_000;
+
+// Pass-it-on notes: each visitor reads the last note and leaves one for the next.
+const NOTE_MAX = 280;
+const NOTES_KEPT = 100;
+const NOTE_GAP_MS = 60_000;
+
+// Fridge magnets: a fixed set of words anyone can drag around a shared board.
+const MAGNET_WORDS = [
+  "the", "a", "I", "you", "we", "they", "is", "was", "will", "not", "and", "but", "or", "if", "when",
+  "my", "your", "our", "all", "no", "lab", "ghost", "cat", "bat", "moon", "dream", "chess", "night",
+  "rain", "Dublin", "sky", "heart", "skull", "friend", "stranger", "secret", "key", "door", "window",
+  "fire", "sea", "star", "coffee", "pizza", "song", "story", "word", "time", "tomorrow", "yesterday",
+  "now", "never", "always", "maybe", "here", "there", "inside", "under", "over", "away", "home",
+  "love", "hate", "want", "need", "find", "lose", "see", "hear", "dance", "run", "sleep", "wake",
+  "break", "build", "paint", "forget", "remember", "whisper", "scream", "wait", "play", "win",
+  "strange", "quiet", "loud", "tiny", "huge", "old", "new", "golden", "broken", "wild", "soft",
+  "dark", "bright", "sticky", "lost", "lucky", "weird", "sad", "happy", "-s", "-ing", "-ed", "-ly", "?", "!",
+];
+const MAGNET_GAP_MS = 40;
+
+// Jam: one shared 16-step loop.  Each of the 12 rows is a bitmask of the steps it plays on.
+// Everyone's page works out "which step is it now?" from the same start time (epoch) and
+// tempo, using the server's clock, so they all hear the same beat at the same moment.
+const JAM_ROWS = 12;
+const JAM_STEPS = 16;
+const JAM_BPM = [70, 160];
+const JAM_TOGGLE_GAP_MS = 60;
+const JAM_TEMPO_GAP_MS = 1500;
+// A starting groove, so the first visitor hears something: kick, snare, hat, clap, six notes, two bass.
+const JAM_START = [0x1111, 0x1010, 0x5555, 0x0000, 0x0000, 0x0000, 0x0204, 0x0000, 0x2040, 0x0000, 0x8101, 0x0000];
 
 // ---- The Worker: checks the request, then hands it to the lobby --------------
 
@@ -95,7 +135,7 @@ export class Lobby extends DurableObject {
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
       const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId",
-                    "event", "lastEvent", "nextEventAt"];
+                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam"];
       for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
       const saved = await ctx.storage.get(keys);
 
@@ -111,6 +151,12 @@ export class Lobby extends DurableObject {
       this.event = saved.get("event") || null;
       this.lastEvent = saved.get("lastEvent") || null;
       this.nextEventAt = saved.get("nextEventAt") || Date.now() + 5 * 60_000;
+      this.visits = saved.get("visits") || 0;
+      this.notes = saved.get("notes") || [];
+      this.lastHoldWin = saved.get("lastHoldWin") || 0;
+      this.jam = saved.get("jam") || { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
+      // Magnets start scattered at random, then stay wherever people leave them.
+      this.magnets = saved.get("magnets") || MAGNET_WORDS.map(() => [randomInt(10, 900), randomInt(10, 700)]);
 
       this.pages = {};
       for (const p of PAGES) {
@@ -164,17 +210,33 @@ export class Lobby extends DurableObject {
       case "unsuggest": return this.unsuggest(me, msg);
       case "report-suggestion": return this.reportSuggestion(me, msg);
       case "found": return this.found(ws, me, msg);
+      case "cursor": return this.cursor(ws, me, msg);
+      case "hold": return this.hold(ws, me, msg);
+      case "magnet": return this.magnet(ws, me, msg);
+      case "leave-note": return this.leaveNote(ws, me, msg);
+      case "time": return this.send(ws, { type: "time", t0: msg.t0, server: Date.now() });
+      case "jam-toggle": return this.jamToggle(ws, me, msg);
+      case "jam-tempo": return this.jamTempo(ws, me, msg);
+      case "report-note": return this.reportNote(me, msg);
       case "admin": return this.admin(ws, me, msg);
     }
   }
 
   webSocketClose(ws) {
     try { ws.close(1000, "bye"); } catch {}
-    this.broadcastPresence(ws);
+    this.leaving(ws);
   }
 
   webSocketError(ws) {
+    this.leaving(ws);
+  }
+
+  // Someone closed a page: update the count, remove their cursor, let go of the button.
+  leaving(ws) {
     this.broadcastPresence(ws);
+    const me = ws.deserializeAttachment();
+    if (me?.id && me.page) this.broadcastPage(me.page, { type: "cursor-gone", who: shortHash(me.id) }, ws);
+    if (me?.holding) this.broadcastHolders(ws);
   }
 
   async hello(ws, me, msg) {
@@ -185,12 +247,18 @@ export class Lobby extends DurableObject {
 
     // Every visit nudges the site's colour a little, so it drifts by itself.
     this.palette.hue = (this.palette.hue + randomInt(-2, 2) + 360) % 360;
-    await this.ctx.storage.put("palette", this.palette);
+    if (msg.page !== "bot") this.visits += 1;
+    await this.ctx.storage.put({ palette: this.palette, visits: this.visits });
+    this.send(ws, { type: "welcome", visitor: this.visits });
 
     this.send(ws, { type: "shouts", shouts: this.publicShouts(me.id) });
     this.send(ws, this.chessState(me.id));
     this.send(ws, { type: "suggestions", list: this.publicSuggestions(me.id) });
     if (me.page) this.send(ws, this.chaosState(me.page));
+    if (me.page === "home") this.send(ws, this.holdersMessage());
+    if (me.page === "magnets") this.send(ws, { type: "magnets", words: MAGNET_WORDS, pos: this.magnets });
+    if (me.page === "note") this.send(ws, this.noteFor(me.id));
+    if (me.page === "jam") this.send(ws, this.jamMessage());
     this.broadcast(this.paletteMessage());
     this.broadcastPresence();
     await this.count(`visit:${msg.page === "admin" ? "admin" : me.page || "other"}`, me.id);
@@ -215,10 +283,10 @@ export class Lobby extends DurableObject {
   }
 
   // Send the same message to everyone looking at one page.
-  broadcastPage(page, msg) {
+  broadcastPage(page, msg, except) {
     const text = JSON.stringify(msg);
     for (const ws of this.ctx.getWebSockets()) {
-      if (ws.deserializeAttachment()?.page === page) try { ws.send(text); } catch {}
+      if (ws !== except && ws.deserializeAttachment()?.page === page) try { ws.send(text); } catch {}
     }
   }
 
@@ -599,6 +667,137 @@ export class Lobby extends DurableObject {
     await this.saveSuggestions();
   }
 
+  // ---- Ghost cursors: everyone on a page sees everyone else's pointer --------------------
+  // Positions are passed on, never stored.  Visitors are shown by a short scrambled tag.
+
+  cursor(ws, me, msg) {
+    if (!me.page || !inBounds(msg.x, msg.y)) return;
+    const now = Date.now();
+    if (now - (me.lastCursor || 0) < CURSOR_GAP_MS) return;
+    me.lastCursor = now;
+    ws.serializeAttachment(me);
+    this.broadcastPage(me.page, { type: "cursor", who: shortHash(me.id), x: msg.x, y: msg.y }, ws);
+  }
+
+  // ---- Hold together: a button that only works if several people hold it at once ------
+
+  holdersMessage(leaving) {
+    const ids = new Set();
+    for (const ws of this.ctx.getWebSockets()) {
+      const a = ws.deserializeAttachment();
+      if (ws !== leaving && a?.holding && a.page === "home") ids.add(a.id);
+    }
+    const rest = Math.max(0, this.lastHoldWin + HOLD_COOLDOWN_MS - Date.now());   // recharging after a win
+    return { type: "holders", n: ids.size, need: HOLD_NEEDED, rest };
+  }
+
+  broadcastHolders(leaving) {
+    const msg = this.holdersMessage(leaving);
+    this.broadcastPage("home", msg, leaving);
+    return msg.n;
+  }
+
+  async hold(ws, me, msg) {
+    if (me.page !== "home") return;
+    me.holding = Boolean(msg.on);
+    ws.serializeAttachment(me);
+    const n = this.broadcastHolders();
+    if (n >= HOLD_NEEDED && Date.now() - this.lastHoldWin > HOLD_COOLDOWN_MS) {
+      this.lastHoldWin = Date.now();
+      await this.ctx.storage.put("lastHoldWin", this.lastHoldWin);
+      await this.count("hold-win");
+      this.broadcastPage("home", { type: "hold-win" });
+      if (this.event) await this.endEvent();
+      await this.startEvent();
+    }
+  }
+
+  // ---- Fridge magnets ---------------------------------------------------------------------
+  // Moves while dragging are only passed on; where a magnet is dropped is saved.
+
+  async magnet(ws, me, msg) {
+    if (me.page !== "magnets" || !Number.isInteger(msg.i) || msg.i < 0 || msg.i >= MAGNET_WORDS.length) return;
+    if (!Number.isInteger(msg.x) || !Number.isInteger(msg.y) || msg.x < 0 || msg.x > 960 || msg.y < 0 || msg.y > 720) return;
+    const now = Date.now();
+    if (!msg.drop && now - (me.lastMagnet || 0) < MAGNET_GAP_MS) return;
+    me.lastMagnet = now;
+    ws.serializeAttachment(me);
+    this.magnets[msg.i] = [msg.x, msg.y];
+    this.broadcastPage("magnets", { type: "magnet", i: msg.i, x: msg.x, y: msg.y }, ws);
+    if (msg.drop) {
+      await this.ctx.storage.put("magnets", this.magnets);
+      await this.count("magnet");
+    }
+  }
+
+  // ---- Pass it on: read the note the last person left, leave one for the next --------------
+
+  noteFor(viewer) {
+    const note = [...this.notes].reverse().find((n) => n.by !== viewer && n.reports.length < REPORTS_TO_HIDE);
+    return { type: "note-for-you", note: note ? { id: note.id, text: note.text, at: note.at } : null, passed: this.notes.length };
+  }
+
+  async leaveNote(ws, me, msg) {
+    if (me.page !== "note") return;
+    const text = clean(msg.text, NOTE_MAX);
+    if (!text) return;
+    const now = Date.now();
+    if (now - (me.lastNote || 0) < NOTE_GAP_MS) {
+      return this.send(ws, { type: "notice", about: "note", text: "One note a minute.  The next visitor will get it." });
+    }
+    me.lastNote = now;
+    ws.serializeAttachment(me);
+    this.notes.push({ id: this.nextId++, by: me.id, text, at: now, reports: [] });
+    this.notes = this.notes.slice(-NOTES_KEPT);
+    await this.ctx.storage.put({ notes: this.notes, nextId: this.nextId });
+    await this.count("note");
+    this.send(ws, { type: "note-left", passed: this.notes.length });
+  }
+
+  async reportNote(me, msg) {
+    const n = this.notes.find((n) => n.id === msg.id);
+    if (!n || n.by === me.id || n.reports.includes(me.id)) return;
+    n.reports.push(me.id);
+    await this.ctx.storage.put("notes", this.notes);
+  }
+
+  // ---- Jam: the shared music machine ------------------------------------------------------
+
+  jamMessage() {
+    return { type: "jam", bpm: this.jam.bpm, epoch: this.jam.epoch, grid: this.jam.grid, rows: JAM_ROWS, steps: JAM_STEPS, now: Date.now() };
+  }
+
+  async jamToggle(ws, me, msg) {
+    const { r, c } = msg;
+    if (me.page !== "jam" || !Number.isInteger(r) || !Number.isInteger(c) || r < 0 || r >= JAM_ROWS || c < 0 || c >= JAM_STEPS) return;
+    const now = Date.now();
+    if (now - (me.lastJam || 0) < JAM_TOGGLE_GAP_MS) return this.send(ws, this.jamMessage());   // resync them
+    me.lastJam = now;
+    ws.serializeAttachment(me);
+    this.jam.grid[r] ^= 1 << c;
+    const on = Boolean(this.jam.grid[r] & (1 << c));
+    this.broadcastPage("jam", { type: "jam-cell", r, c, on });
+    await this.ctx.storage.put("jam", this.jam);
+    await this.count("jam-toggle");
+  }
+
+  // Change tempo without a hiccup: keep the current position in the loop where it is.
+  async jamTempo(ws, me, msg) {
+    const bpm = msg.bpm;
+    if (me.page !== "jam" || !Number.isInteger(bpm) || bpm < JAM_BPM[0] || bpm > JAM_BPM[1]) return;
+    const now = Date.now();
+    if (now - (me.lastTempo || 0) < JAM_TEMPO_GAP_MS) return this.send(ws, this.jamMessage());
+    me.lastTempo = now;
+    ws.serializeAttachment(me);
+    const stepMs = (bpm) => 60_000 / bpm / 4;           // 16th notes
+    const position = (now - this.jam.epoch) / stepMs(this.jam.bpm);
+    this.jam.bpm = bpm;
+    this.jam.epoch = now - position * stepMs(bpm);
+    this.broadcastPage("jam", this.jamMessage());
+    await this.ctx.storage.put("jam", this.jam);
+    await this.count("jam-tempo");
+  }
+
   // ---- Surprise events ---------------------------------------------------------------
 
   eventMessage() {
@@ -750,6 +949,26 @@ export class Lobby extends DurableObject {
         break;
       case "usage":
         break;
+      case "delete-note":
+        this.notes = this.notes.filter((n) => n.id !== msg.id);
+        await this.ctx.storage.put("notes", this.notes);
+        break;
+      case "unhide-note": {
+        const n = this.notes.find((n) => n.id === msg.id);
+        if (n) n.reports = [];
+        await this.ctx.storage.put("notes", this.notes);
+        break;
+      }
+      case "reset-jam":
+        this.jam = { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
+        await this.ctx.storage.put("jam", this.jam);
+        this.broadcastPage("jam", this.jamMessage());
+        break;
+      case "reset-magnets":
+        this.magnets = MAGNET_WORDS.map(() => [randomInt(10, 900), randomInt(10, 700)]);
+        await this.ctx.storage.put("magnets", this.magnets);
+        this.broadcastPage("magnets", { type: "magnets", words: MAGNET_WORDS, pos: this.magnets });
+        break;
       case "delete-shout":
         this.shouts = this.shouts.filter((s) => s.id !== msg.id);
         await this.saveShouts();
@@ -800,6 +1019,8 @@ export class Lobby extends DurableObject {
   adminData() {
     return {
       shouts: this.shouts.map((s) => ({ id: s.id, name: s.name, text: s.text, at: s.at, reports: s.reports.length })),
+      notes: this.notes.map((n) => ({ id: n.id, text: n.text, at: n.at, reports: n.reports.length })),
+      visits: this.visits,
       suggestions: this.suggestions.map((s) => ({
         id: s.id, text: s.text, at: s.at, votes: s.votes.length, reports: s.reports.length, done: s.done,
       })),

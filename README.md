@@ -37,6 +37,12 @@ the site's shared colour.  `admin/` resets it and moderates shouts and suggestio
 the admin key, set once with `npx wrangler secret put ADMIN_KEY` (for `wrangler dev`, put
 `ADMIN_KEY=...` in `server/.dev.vars`, which git ignores).
 
+`extras.js` adds the ambient things on every page: other visitors' cursors, old shouts
+drifting past as echoes, Dublin's real weather and daylight, tab-title pleas, and a few secret
+words.  `jam/` is a shared music machine (Web Audio synths; every page syncs to the server's
+clock), `magnets/` a shared fridge door, `note/` pass-it-on notes, and the home page has the
+hold-together button and a visitor counter.
+
 `events.js` shows the surprises the server sets off now and then (snow, gravity, a ghost, a
 golden key ...).  To add one: give it a length in `EVENTS` in `server/src/index.js`, then a line
 in `TEXT` and a function in `EFFECTS` in `events.js`.  The admin page can start and stop them
