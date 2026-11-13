@@ -337,6 +337,7 @@ export function startChaos({ on, send, page, bar }) {
     hidden = value;
     hideBox.checked = value;
     try { localStorage.setItem("lab-hide-mess", value ? "1" : "0"); } catch {}
+    dispatchEvent(new CustomEvent("lab-setting", { detail: { name: "hideMess", value } }));   // tell the 🧭 menu
     applyWear();
     redraw();
   }
@@ -351,6 +352,8 @@ export function startChaos({ on, send, page, bar }) {
   toggle.addEventListener("click", () => openTray(tray.hidden));
   tray.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   hideBox.addEventListener("change", () => setHidden(hideBox.checked));
+  // The same switch lives in the 🧭 menu (settings.js); keep the two in step.
+  addEventListener("lab-setting", (e) => { if (e.detail.name === "hideMess" && e.detail.value !== hidden) setHidden(e.detail.value); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !tray.hidden) openTray(false); });
 
   let lastRepaint = 0;

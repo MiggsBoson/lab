@@ -5,6 +5,8 @@
 // To add a new surprise: give it a length in EVENTS in server/src/index.js, then add a
 // line to TEXT and a function to EFFECTS below.
 
+import { getSetting, onSetting, calm } from "./settings.js";
+
 const TEXT = {
   snow: "❄️ It's snowing on the lab",
   gravity: "🍎 Gravity's gone funny",
@@ -42,10 +44,16 @@ export function startEvents({ on, send, page }) {
     const same = current && current.kind === msg.kind && current.start === msg.start;
     const nowFound = same && !current.foundBy && msg.foundBy;
     current = msg;
-    if (!same || nowFound) {
+    if ((!same || nowFound) && !getSetting("noSurprises")) {
       undo?.();
       undo = EFFECTS[msg.kind]?.(msg) || null;
     }
+    showBanner();
+  });
+  // Turned surprises off (or on) half-way through one: stop it, or start it.
+  onSetting("noSurprises", (off) => {
+    undo?.();
+    undo = !off && current ? EFFECTS[current.kind]?.(current) || null : null;
     showBanner();
   });
   on("event-end", stop);
@@ -79,6 +87,7 @@ export function startEvents({ on, send, page }) {
       }
     } else {
       banner.textContent = TEXT[current.kind] || "Something's happening";
+      if (getSetting("noSurprises")) banner.textContent += " (you've turned surprises off)";
     }
     const time = make("span", "event-clock");
     time.textContent = clock;
@@ -323,7 +332,7 @@ function clamp(n, lo, hi) {
 }
 
 function reducedMotion() {
-  return matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return calm();
 }
 
 // A repeatable random sequence from a number (mulberry32).

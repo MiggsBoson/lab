@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>The lab</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
   <style>
     /* Styles only this page needs. */
     .ideas { margin-top: 2rem; }
@@ -67,6 +71,37 @@
     .hold-btn.pressed { scale: 0.92; }
     .hold-btn.won { animation: hold-won 0.9s ease-out; }
     @keyframes hold-won { 40% { scale: 1.25; rotate: 12deg; } }
+    .polls { margin-top: 1rem; }
+    #poll-form { display: grid; gap: 0.4rem; margin-top: 0.5rem; }
+    #poll-form[hidden] { display: none; }
+    #poll-notice:empty { display: none; }
+    .poll-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 1rem; }
+    .poll-q { font-weight: 600; overflow-wrap: anywhere; }
+    .poll-option {
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      margin-top: 0.35rem;
+      padding: 0.45rem 0.7rem;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      text-align: left;
+    }
+    .poll-option::before {                    /* the result bar, filling from the left */
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: var(--share, 0%);
+      background: color-mix(in srgb, var(--accent) 22%, transparent);
+      transition: width 0.6s cubic-bezier(0.3, 0.7, 0.2, 1);
+    }
+    .poll-option > span { position: relative; overflow-wrap: anywhere; }
+    .poll-option[aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+    .poll-option:disabled { cursor: default; opacity: 1; }
+    .poll-option:hover { filter: none; }
     .odometer { display: inline-flex; gap: 2px; margin-left: 0.3rem; vertical-align: middle; }
     .odometer span {
       padding: 0 0.28rem;
@@ -104,6 +139,12 @@
         </a>
       </li>
       <li>
+        <a href="tug/">
+          <strong>Tug of war</strong>
+          <span>Red against blue.  Pick a side and hammer the button.</span>
+        </a>
+      </li>
+      <li>
         <a href="chess/">
           <strong>Chess</strong>
           <span>One board for everyone.  Make the first move to play white; the next person plays black.</span>
@@ -134,6 +175,23 @@
       <p class="muted">Press and hold.  If three people are holding at the same moment, something happens to the lab, for everyone.</p>
       <button id="hold" class="hold-btn" type="button" aria-describedby="hold-count">✋</button>
       <p id="hold-count" class="muted" aria-live="polite">Nobody's holding it.</p>
+    </section>
+
+    <section class="card polls" aria-labelledby="polls-heading">
+      <h2 id="polls-heading">Polls</h2>
+      <p class="muted">Ask everyone a quick question.  Polls run for 30 minutes; results move live.</p>
+      <button id="poll-open" class="secondary" type="button" aria-expanded="false">Ask a question</button>
+      <form id="poll-form" hidden>
+        <input id="poll-q" type="text" maxlength="120" placeholder="Your question" aria-label="Your question" required>
+        <input class="poll-opt" type="text" maxlength="40" placeholder="Answer 1" aria-label="Answer 1" required>
+        <input class="poll-opt" type="text" maxlength="40" placeholder="Answer 2" aria-label="Answer 2" required>
+        <div class="row">
+          <button id="poll-more" class="secondary" type="button">+ Another answer</button>
+          <button>Start the poll</button>
+        </div>
+      </form>
+      <p id="poll-notice" class="muted" aria-live="polite" style="margin-top: 0.6rem;"></p>
+      <ol id="polls" class="poll-list"></ol>
     </section>
 
     <section class="card ideas" aria-labelledby="ideas-heading">
@@ -341,6 +399,107 @@
       void hold.offsetWidth;
       hold.classList.add("won");
       $("hold-count").textContent = "🎉 You did it.  Look around…";
+    });
+
+    // ---- Polls: one vote each, changeable; tap your answer again to take it back -------
+
+    let polls = [];
+    const shares = new Map();   // each bar's last width, so new votes slide it instead of jumping
+    function renderPolls() {
+      const list = $("polls");
+      list.replaceChildren();
+      const sorted = [...polls].sort((a, b) => (b.open - a.open) || b.at - a.at);
+      if (!sorted.length) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "No polls yet.  Ask the first question.";
+        list.append(li);
+        return;
+      }
+      for (const p of sorted) {
+        const li = document.createElement("li");
+        const q = document.createElement("div");
+        q.className = "poll-q";
+        q.textContent = p.q;
+        li.append(q);
+        const total = p.options.reduce((n, o) => n + o.votes, 0);
+        p.options.forEach((o, i) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "poll-option";
+          b.dataset.wear = "poll";
+          b.disabled = !p.open;
+          b.setAttribute("aria-pressed", p.voted === i);
+          const share = total ? Math.round((o.votes / total) * 100) : 0;
+          const key = `${p.id}:${i}`;
+          b.style.setProperty("--share", `${shares.get(key) ?? 0}%`);
+          requestAnimationFrame(() => requestAnimationFrame(() => b.style.setProperty("--share", `${share}%`)));
+          shares.set(key, share);
+          const label = document.createElement("span");
+          label.textContent = o.text;
+          const count = document.createElement("span");
+          count.textContent = total ? `${share}% · ${o.votes}` : "";
+          b.append(label, count);
+          b.addEventListener("click", () => send({ type: "poll-vote", id: p.id, i }));
+          li.append(b);
+        });
+        const meta = document.createElement("div");
+        meta.className = "muted who";
+        const left = Math.max(0, Math.ceil((p.ends - Date.now()) / 60000));
+        meta.textContent = `${total} vote${total === 1 ? "" : "s"} · ${p.open ? `${left} min left` : "finished"}`;
+        if (!p.mine && p.open) {
+          const report = document.createElement("button");
+          report.type = "button";
+          report.className = "linkish";
+          report.textContent = "report";
+          report.addEventListener("click", () => {
+            if (!confirm("Report this poll?  Two reports hide it.")) return;
+            send({ type: "poll-report", id: p.id });
+            report.textContent = "reported";
+            report.disabled = true;
+          });
+          meta.append(report);
+        }
+        li.append(meta);
+        list.append(li);
+      }
+    }
+    on("polls", (msg) => { polls = msg.list; renderPolls(); });
+    on("notice", (msg) => { if (msg.about === "poll") $("poll-notice").textContent = msg.text; });
+    setInterval(() => {   // tick the clocks, and close polls whose time is up
+      const now = Date.now();
+      polls.forEach((p) => { if (p.open && p.ends <= now) p.open = false; });
+      renderPolls();
+    }, 30_000);
+
+    $("poll-open").addEventListener("click", () => {
+      const form = $("poll-form");
+      form.hidden = !form.hidden;
+      $("poll-open").setAttribute("aria-expanded", !form.hidden);
+      if (!form.hidden) $("poll-q").focus();
+    });
+    $("poll-more").addEventListener("click", () => {
+      const opts = document.querySelectorAll(".poll-opt");
+      if (opts.length >= 4) return;
+      const input = opts[0].cloneNode();
+      input.value = "";
+      input.required = false;
+      input.placeholder = input.ariaLabel = `Answer ${opts.length + 1}`;
+      input.setAttribute("aria-label", `Answer ${opts.length + 1}`);
+      opts[opts.length - 1].after(input);
+      if (opts.length + 1 >= 4) $("poll-more").hidden = true;
+    });
+    $("poll-form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const options = [...document.querySelectorAll(".poll-opt")].map((i) => i.value.trim()).filter(Boolean);
+      if (!send({ type: "poll-create", q: $("poll-q").value.trim(), options })) {
+        $("poll-notice").textContent = "Not connected yet.  Try again in a moment.";
+        return;
+      }
+      $("poll-form").reset();
+      $("poll-form").hidden = true;
+      $("poll-open").setAttribute("aria-expanded", "false");
+      $("poll-notice").textContent = "";
     });
 
     // ---- The visitor counter, the old-fashioned way -----------------------------------

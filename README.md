@@ -43,6 +43,12 @@ words.  `jam/` is a shared music machine (Web Audio synths; every page syncs to 
 clock), `magnets/` a shared fridge door, `note/` pass-it-on notes, and the home page has the
 hold-together button and a visitor counter.
 
+`menu.js` is the 🧭 button: rooms with live headcounts, the command palette (press `/` or
+Ctrl+K), the "while you were away" note, your name, sharing, and per-visitor settings kept by
+`settings.js` (no surprises, no ghosts, calm mode ...).  The home page also has live polls, and
+`tug/` is a red-against-blue tug of war.  `manifest.webmanifest` and the `icon*` files let
+phones add the lab to the home screen.
+
 `events.js` shows the surprises the server sets off now and then (snow, gravity, a ghost, a
 golden key ...).  To add one: give it a length in `EVENTS` in `server/src/index.js`, then a line
 in `TEXT` and a function in `EFFECTS` in `events.js`.  The admin page can start and stop them
