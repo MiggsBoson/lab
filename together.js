@@ -11,6 +11,7 @@
 
 import { startChaos } from "./chaos.js";
 import { startEvents } from "./events.js";
+import { startExtras } from "./extras.js";
 
 // On this computer, talk to `npx wrangler dev`; online, to the deployed server.
 const LOCAL = location.hostname === "localhost" || location.hostname === "127.0.0.1";
@@ -124,6 +125,7 @@ on("react", (msg) => {
 if (PAGE !== "admin") {
   startChaos({ on, send, page: PAGE, bar });
   startEvents({ on, send, page: PAGE });
+  startExtras({ on, send, page: PAGE });
 }
 
 connect();

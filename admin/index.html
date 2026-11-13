@@ -57,6 +57,8 @@
         <div class="row">
           <button data-action="reset-colours" class="secondary" data-nopage>Site colours</button>
           <button data-action="reset-chess" class="secondary" data-nopage>Chess game</button>
+          <button data-action="reset-magnets" class="secondary" data-nopage>Fridge magnets</button>
+          <button data-action="reset-jam" class="secondary" data-nopage>Jam</button>
         </div>
         <table class="counts" style="margin-top: 1rem;">
           <thead><tr><th>Page</th><th>Stickers</th><th>Paint</th><th>Wear spots</th></tr></thead>
@@ -79,6 +81,12 @@
             <option value="ghost">👻 Ghost</option>
             <option value="treasure">🗝️ Golden key</option>
             <option value="paintparty">🎨 Paint party</option>
+            <option value="earthquake">🌋 Earthquake</option>
+            <option value="mirror">🪞 Mirror</option>
+            <option value="balloons">🎈 Balloons</option>
+            <option value="tiny">🔬 Tiny</option>
+            <option value="comic">✍️ Comic font</option>
+            <option value="fireflies">✨ Fireflies</option>
           </select>
           <button id="event-start" class="secondary">Start now</button>
           <button id="event-stop" class="secondary">Stop</button>
@@ -95,6 +103,11 @@
       <section class="card">
         <h2>Suggestions</h2>
         <ol id="suggestions" class="items"></ol>
+      </section>
+
+      <section class="card">
+        <h2>Pass-it-on notes</h2>
+        <ol id="notes" class="items"></ol>
       </section>
 
       <section class="card">
@@ -185,7 +198,7 @@
       }));
       if (!(data.usage || []).length) $("usage").textContent = "Nothing counted yet.";
 
-      $("summary").textContent = `Site colour hue ${data.hue} · ${data.total} clicks recorded (the site's age).`;
+      $("summary").textContent = `Site colour hue ${data.hue} · ${data.total} clicks recorded (the site's age) · ${data.visits ?? 0} visits ever.`;
 
       $("suggestions").replaceChildren(...data.suggestions.map((s) => {
         const li = document.createElement("li");
@@ -221,6 +234,23 @@
         return li;
       }));
       if (!data.shouts.length) $("shouts").textContent = "None yet.";
+
+      $("notes").replaceChildren(...[...(data.notes || [])].reverse().map((n) => {
+        const li = document.createElement("li");
+        const text = document.createElement("div");
+        text.textContent = n.text;
+        const meta = document.createElement("div");
+        meta.className = "muted";
+        meta.textContent = `${when(n.at)} · ${n.reports} reports${n.reports >= 2 ? " (hidden)" : ""}`;
+        const row = document.createElement("div");
+        row.className = "row";
+        row.style.marginTop = "0.25rem";
+        if (n.reports >= 2) row.append(button("Unhide", () => admin("unhide-note", { id: n.id })));
+        row.append(button("Delete", () => { if (confirm("Delete this note?")) admin("delete-note", { id: n.id }); }, true));
+        li.append(text, meta, row);
+        return li;
+      }));
+      if (!(data.notes || []).length) $("notes").textContent = "None yet.";
     }
 
     on("admin-reply", (msg) => {
