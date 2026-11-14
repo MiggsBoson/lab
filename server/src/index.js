@@ -37,7 +37,7 @@ const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
 
 // Chaos
-const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug"];
+const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug", "plant"];
 const STICKERS = [
   "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
   "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
@@ -122,6 +122,12 @@ const TUG_END = 40;
 const TUG_PULL_GAP_MS = 70;
 const TUG_SEND_GAP_MS = 80;
 
+// The shared plant: each watering adds moisture, which drains away; it grows while damp
+const PLANT_DRINK = 20;                 // moisture per watering (out of 100)
+const PLANT_DRAIN_MS = 15 * 60_000;     // one point of moisture dries up every 15 minutes
+const PLANT_GAP_MS = 10 * 60_000;       // one watering per visitor per 10 minutes
+const PLANT_HEIGHT_MAX = 500;
+
 const JAM_START = [0x1111, 0x1010, 0x5555, 0x0000, 0x0000, 0x0000, 0x0204, 0x0000, 0x2040, 0x0000, 0x8101, 0x0000];
 
 // ---- The Worker: checks the request, then hands it to the lobby --------------
@@ -148,7 +154,7 @@ export class Lobby extends DurableObject {
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
       const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId",
-                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug"];
+                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug", "plant"];
       for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
       const saved = await ctx.storage.get(keys);
 
@@ -170,6 +176,8 @@ export class Lobby extends DurableObject {
       this.jam = saved.get("jam") || { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
       this.polls = saved.get("polls") || [];
       this.tug = saved.get("tug") || { pos: 0, red: 0, blue: 0 };
+      this.plant = saved.get("plant") || { height: 1, moisture: 30, at: Date.now(), drinks: 0, wilts: 0 };
+      this.plantDrinkers = new Map();              // visitor id -> last watering (memory only; a restart just forgets)
       // Magnets start scattered at random, then stay wherever people leave them.
       this.magnets = saved.get("magnets") || MAGNET_WORDS.map(() => [randomInt(10, 900), randomInt(10, 700)]);
 
@@ -238,6 +246,7 @@ export class Lobby extends DurableObject {
       case "poll-report": return this.pollReport(me, msg);
       case "tug-join": return this.tugJoin(ws, me, msg);
       case "tug-pull": return this.tugPull(ws, me);
+      case "plant-water": return this.plantWater(ws, me);
       case "report-note": return this.reportNote(me, msg);
       case "admin": return this.admin(ws, me, msg);
     }
@@ -283,6 +292,7 @@ export class Lobby extends DurableObject {
     if (me.page === "jam") this.send(ws, this.jamMessage());
     if (me.page === "home") this.send(ws, { type: "polls", list: this.publicPolls(me.id) });
     if (me.page === "tug") this.send(ws, this.tugMessage());
+    if (me.page === "plant") this.send(ws, this.plantMessage());
     this.broadcast(this.paletteMessage());
     this.broadcastPresence();
     await this.count(`visit:${msg.page === "admin" ? "admin" : me.page || "other"}`, me.id);
@@ -921,6 +931,45 @@ export class Lobby extends DurableObject {
     }
     if (Math.abs(this.tug.pos) % 5 === 0) await this.ctx.storage.put("tug", this.tug);   // save now and then
     this.sendTug();
+  }
+
+  // ---- The shared plant -------------------------------------------------------------------
+
+  plantMoisture(now) {
+    return Math.max(0, this.plant.moisture - Math.floor((now - this.plant.at) / PLANT_DRAIN_MS));
+  }
+
+  plantMessage() {
+    const now = Date.now();
+    const p = this.plant;
+    return { type: "plant", height: p.height, moisture: this.plantMoisture(now), drinks: p.drinks, wilts: p.wilts,
+             lastDrink: p.lastDrink || 0, now };
+  }
+
+  async plantWater(ws, me) {
+    if (me.page !== "plant") return;
+    const now = Date.now();
+    const last = this.plantDrinkers.get(me.id) || 0;
+    if (now - last < PLANT_GAP_MS) return this.send(ws, { type: "plant-wait", wait: PLANT_GAP_MS - (now - last) });
+    if (this.plantDrinkers.size > 1000) {          // keep the memory small: forget the old ones
+      for (const [id, t] of this.plantDrinkers) if (now - t >= PLANT_GAP_MS) this.plantDrinkers.delete(id);
+    }
+    this.plantDrinkers.set(me.id, now);
+
+    const p = this.plant;
+    const before = this.plantMoisture(now);
+    if (before === 0 && p.height > 1) {            // it had dried out completely: it lost half its height
+      p.height = Math.max(1, Math.floor(p.height / 2));
+      p.wilts += 1;
+    }
+    p.moisture = Math.min(100, before + PLANT_DRINK);
+    p.at = now;
+    p.height = Math.min(PLANT_HEIGHT_MAX, p.height + 1);
+    p.drinks += 1;
+    p.lastDrink = now;
+    await this.ctx.storage.put("plant", p);
+    await this.count("plant-water");
+    this.broadcastPage("plant", this.plantMessage());
   }
 
   // ---- Jam: the shared music machine ------------------------------------------------------
