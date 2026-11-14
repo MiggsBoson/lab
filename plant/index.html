@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The plant · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
+  <style>
+    /* Styles only this page needs. */
+    .pot { text-align: center; padding: 1rem 0 0; }
+    #plant { display: inline-block; line-height: 1; transform-origin: 50% 100%; transition: font-size 0.8s ease; }
+    #plant.wilted { filter: grayscale(0.7); rotate: 12deg; }
+    #plant.sway { animation: sway 4s ease-in-out infinite; }
+    @keyframes sway { 50% { rotate: 3deg; } }
+    .pot-base { font-size: 3rem; line-height: 1; margin-top: -0.3rem; }
+    .meter { height: 0.8rem; border-radius: 0.4rem; background: var(--border); overflow: hidden; margin: 0.4rem 0; }
+    .meter > div { height: 100%; width: 0; background: var(--live, var(--accent)); transition: width 0.6s ease; }
+    #water { width: 100%; padding: 1rem; font-size: 1.2rem; }
+    @media (prefers-reduced-motion: reduce) {
+      #plant, .meter > div { transition: none; }
+      #plant.sway { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>The plant</h1>
+    <p class="lede">One plant for everyone.  Every watering helps it grow, but the water dries up: if nobody waters it for a day and a half, it wilts and loses half its height.</p>
+
+    <section class="card">
+      <div class="pot" aria-hidden="true"><div id="plant">🌱</div><div class="pot-base">🪴</div></div>
+      <p id="status" aria-live="polite">Connecting…</p>
+      <div class="meter" role="progressbar" aria-label="Water in the soil" aria-valuemin="0" aria-valuemax="100"><div id="bar"></div></div>
+      <p class="muted" id="facts"></p>
+      <button id="water" type="button" disabled>💧 Water it</button>
+      <p class="muted" id="wait" aria-live="polite" style="margin-top: 0.6rem;"></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+
+    const $ = (id) => document.getElementById(id);
+    const KEY = "lab-plant-watered";               // when this device last watered it
+    let waitUntil = 0;
+    let state = null;
+    let serverOffset = 0;                          // server clock minus ours, so "ago" stays right
+    try { waitUntil = Number(localStorage.getItem(KEY)) || 0; } catch {}
+
+    // The plant grows through a few stages; its size follows its height.
+    function look(height, moisture) {
+      const emoji = moisture === 0 ? "🥀" : height < 5 ? "🌱" : height < 15 ? "🌿" : height < 40 ? "🪴" : height < 100 ? "🌳" : "🌸";
+      return { emoji, size: Math.min(8, 3 + Math.log2(height) * 0.7) };
+    }
+
+    function ago(ms) {
+      const m = Math.round(ms / 60000);
+      return m < 1 ? "just now" : m < 90 ? `${m} min ago` : `${Math.round(m / 60)} hours ago`;
+    }
+
+    // The soil dries by one point every 15 minutes (same rule as the server), so work out the current level here.
+    function moistureNow() {
+      return Math.max(0, state.moisture - Math.floor((Date.now() - state.got) / (15 * 60_000)));
+    }
+
+    function render() {
+      if (!state) return;
+      const moisture = moistureNow();
+      const { emoji, size } = look(state.height, moisture);
+      const plant = $("plant");
+      plant.textContent = emoji;
+      plant.style.fontSize = `${size}rem`;
+      plant.classList.toggle("wilted", moisture === 0);
+      plant.classList.toggle("sway", moisture > 0);
+      $("bar").style.width = `${moisture}%`;
+      $("bar").parentElement.setAttribute("aria-valuenow", moisture);
+      $("status").textContent = moisture === 0 ? "It's wilting. Quick, water it!"
+        : moisture < 25 ? "It's thirsty."
+        : moisture < 70 ? "It's doing fine."
+        : "It's happy.";
+      const last = state.lastDrink ? `Last watered ${ago(Date.now() + serverOffset - state.lastDrink)}.` : "Nobody has watered it yet.";
+      $("facts").textContent = `${state.height} cm tall · watered ${state.drinks} times · wilted ${state.wilts} times. ${last}`;
+    }
+
+    function tick() {
+      const left = waitUntil - Date.now();
+      $("water").disabled = !state || left > 0;
+      $("wait").textContent = left > 0 ? `You watered it. You can again in ${Math.ceil(left / 60000)} min.` : "";
+    }
+    setInterval(() => { render(); tick(); }, 30000);
+
+    on("plant", (msg) => {
+      state = { ...msg, got: Date.now() };
+      serverOffset = msg.now - Date.now();
+      render();
+      tick();
+    });
+    on("plant-wait", (msg) => {                    // the server says you're too early (e.g. other device)
+      waitUntil = Date.now() + msg.wait;
+      tick();
+    });
+    $("water").addEventListener("click", () => {
+      waitUntil = Date.now() + 10 * 60_000;        // the server enforces this too
+      try { localStorage.setItem(KEY, waitUntil); } catch {}
+      send({ type: "plant-water" });
+      navigator.vibrate?.(10);
+      tick();
+    });
+    // Until the server knows about the plant (it may be a minute behind this page), say so.
+    setTimeout(() => { if (!state) $("status").textContent = "The plant isn't here yet; try again in a minute."; }, 6000);
+  </script>
+</body>
+</html>
