@@ -37,7 +37,7 @@ const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
 
 // Chaos
-const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug"];
+const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug", "capsule"];
 const STICKERS = [
   "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
   "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
@@ -85,6 +85,14 @@ const HOLD_COOLDOWN_MS = 3 * 60_000;
 const NOTE_MAX = 280;
 const NOTES_KEPT = 100;
 const NOTE_GAP_MS = 60_000;
+
+// Time capsule: a visitor seals a message that nobody can read until it opens for everyone.
+const CAPSULE_MAX = 200;                // characters
+const CAPSULE_DAYS = [1, 7, 30];        // how long a capsule stays sealed
+const CAPSULE_GAP_MS = 5 * 60_000;      // one per visitor per 5 minutes
+const CAPSULE_SEALED_MAX = 60;          // sealed at once, so the shelf can't be flooded
+const CAPSULE_OPENED_KEPT = 40;         // opened ones that stay readable
+const CAPSULE_GET_GAP_MS = 2000;
 
 // Fridge magnets: a fixed set of words anyone can drag around a shared board.
 const MAGNET_WORDS = [
@@ -148,7 +156,7 @@ export class Lobby extends DurableObject {
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
       const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId",
-                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug"];
+                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug", "capsules"];
       for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
       const saved = await ctx.storage.get(keys);
 
@@ -169,6 +177,7 @@ export class Lobby extends DurableObject {
       this.lastHoldWin = saved.get("lastHoldWin") || 0;
       this.jam = saved.get("jam") || { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
       this.polls = saved.get("polls") || [];
+      this.capsules = saved.get("capsules") || [];
       this.tug = saved.get("tug") || { pos: 0, red: 0, blue: 0 };
       // Magnets start scattered at random, then stay wherever people leave them.
       this.magnets = saved.get("magnets") || MAGNET_WORDS.map(() => [randomInt(10, 900), randomInt(10, 700)]);
@@ -238,7 +247,10 @@ export class Lobby extends DurableObject {
       case "poll-report": return this.pollReport(me, msg);
       case "tug-join": return this.tugJoin(ws, me, msg);
       case "tug-pull": return this.tugPull(ws, me);
+      case "capsule-seal": return this.capsuleSeal(ws, me, msg);
+      case "capsule-get": return this.capsuleGet(ws, me);
       case "report-note": return this.reportNote(me, msg);
+      case "report-capsule": return this.reportCapsule(me, msg);
       case "admin": return this.admin(ws, me, msg);
     }
   }
@@ -283,6 +295,7 @@ export class Lobby extends DurableObject {
     if (me.page === "jam") this.send(ws, this.jamMessage());
     if (me.page === "home") this.send(ws, { type: "polls", list: this.publicPolls(me.id) });
     if (me.page === "tug") this.send(ws, this.tugMessage());
+    if (me.page === "capsule") this.send(ws, this.capsuleMessage());
     this.broadcast(this.paletteMessage());
     this.broadcastPresence();
     await this.count(`visit:${msg.page === "admin" ? "admin" : me.page || "other"}`, me.id);
@@ -789,6 +802,63 @@ export class Lobby extends DurableObject {
     if (!n || n.by === me.id || n.reports.includes(me.id)) return;
     n.reports.push(me.id);
     await this.ctx.storage.put("notes", this.notes);
+  }
+
+  // ---- Time capsule ------------------------------------------------------------------------
+
+  // Sealed text never leaves the server: only when it opens, and only if it isn't reported.
+  capsuleMessage() {
+    const now = Date.now();
+    const sealed = this.capsules.filter((c) => c.opens > now);
+    return {
+      type: "capsule", now,
+      sealed: sealed.length,
+      next: sealed.length ? Math.min(...sealed.map((c) => c.opens)) : 0,
+      opened: this.capsules
+        .filter((c) => c.opens <= now && c.reports.length < REPORTS_TO_HIDE)
+        .sort((a, b) => b.opens - a.opens)
+        .map((c) => ({ id: c.id, text: c.text, at: c.at, opens: c.opens })),
+    };
+  }
+
+  async capsuleSeal(ws, me, msg) {
+    if (me.page !== "capsule") return;
+    const text = clean(msg.text, CAPSULE_MAX);
+    if (!text || !CAPSULE_DAYS.includes(msg.days)) return;
+    const now = Date.now();
+    if (now - (me.lastCapsule || 0) < CAPSULE_GAP_MS) {
+      return this.send(ws, { type: "notice", about: "capsule", text: "One capsule every five minutes.  Give it a moment." });
+    }
+    if (this.capsules.filter((c) => c.opens > now).length >= CAPSULE_SEALED_MAX) {
+      return this.send(ws, { type: "notice", about: "capsule", text: "The shelf is full of sealed capsules.  Come back once some have opened." });
+    }
+    me.lastCapsule = now;
+    ws.serializeAttachment(me);
+    this.capsules.push({ id: this.nextId++, by: me.id, text, at: now, opens: now + msg.days * 24 * 3600_000, reports: [] });
+    // Keep only the newest opened ones; sealed ones are never dropped.
+    const opened = this.capsules.filter((c) => c.opens <= now).sort((a, b) => b.opens - a.opens).slice(0, CAPSULE_OPENED_KEPT);
+    this.capsules = this.capsules.filter((c) => c.opens > now || opened.includes(c));
+    await this.ctx.storage.put({ capsules: this.capsules, nextId: this.nextId });
+    await this.count("capsule");
+    this.send(ws, { type: "capsule-sealed", opens: now + msg.days * 24 * 3600_000 });
+    this.broadcastPage("capsule", this.capsuleMessage());
+  }
+
+  // Pages ask again when a capsule is due to open.
+  capsuleGet(ws, me) {
+    if (me.page !== "capsule") return;
+    const now = Date.now();
+    if (now - (me.lastCapsuleGet || 0) < CAPSULE_GET_GAP_MS) return;
+    me.lastCapsuleGet = now;
+    ws.serializeAttachment(me);
+    this.send(ws, this.capsuleMessage());
+  }
+
+  async reportCapsule(me, msg) {
+    const c = this.capsules.find((c) => c.id === msg.id);
+    if (!c || c.opens > Date.now() || c.by === me.id || c.reports.includes(me.id)) return;
+    c.reports.push(me.id);
+    await this.ctx.storage.put("capsules", this.capsules);
   }
 
   // ---- While you were away: what changed since a given time -------------------------------

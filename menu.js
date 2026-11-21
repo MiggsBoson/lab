@@ -12,6 +12,7 @@ export const ROOMS = [
   { page: "jam", title: "Jam", emoji: "🎛️" },
   { page: "magnets", title: "Fridge magnets", emoji: "🧲" },
   { page: "note", title: "Pass it on", emoji: "✉️" },
+  { page: "capsule", title: "Time capsule", emoji: "⏳" },
   { page: "tug", title: "Tug of war", emoji: "🪢" },
   { page: "chess", title: "Chess", emoji: "♟️" },
   { page: "live", title: "Live data", emoji: "📡" },

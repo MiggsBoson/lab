@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Time capsule · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
+  <style>
+    textarea {
+      width: 100%;
+      min-height: 6rem;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      font: inherit;
+      resize: vertical;
+    }
+    textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    fieldset { border: 0; padding: 0; margin: 0.6rem 0; }
+    legend { padding: 0; margin-bottom: 0.3rem; }
+    fieldset label { margin-right: 1rem; white-space: nowrap; }
+    #notice:empty { display: none; }
+    .opened { list-style: none; padding: 0; margin: 0; }
+    .opened li { padding: 0.7rem 0; border-top: 1px solid var(--border); }
+    .opened li:first-child { border-top: 0; }
+    .opened p { margin: 0 0 0.3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+    /* A freshly opened capsule pops once; skipped for people who prefer no motion. */
+    @media (prefers-reduced-motion: no-preference) {
+      .opened li.fresh { animation: pop 0.6s ease-out; }
+      @keyframes pop { from { transform: scale(0.96); opacity: 0; } }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Time capsule</h1>
+    <p class="lede">Seal a short message. Nobody, not even the owner, can read it until it opens for everyone at once.</p>
+
+    <section class="card">
+      <h2>On the shelf</h2>
+      <p id="shelf" class="muted">Waiting for the live server…</p>
+    </section>
+
+    <section class="card" id="make" hidden>
+      <h2>Seal one</h2>
+      <form id="seal">
+        <textarea id="text" maxlength="200" placeholder="A prediction, a hello to the future, a secret that keeps…" aria-label="Your message for the capsule" required></textarea>
+        <fieldset>
+          <legend>Opens in</legend>
+          <label><input type="radio" name="days" value="1" checked> a day</label>
+          <label><input type="radio" name="days" value="7"> a week</label>
+          <label><input type="radio" name="days" value="30"> a month</label>
+        </fieldset>
+        <div class="row">
+          <button>Seal it</button>
+          <span id="count" class="muted">0 / 200</span>
+        </div>
+      </form>
+      <p id="sent" class="muted" hidden></p>
+      <p id="notice" class="muted" aria-live="polite" style="margin-top: 0.6rem;"></p>
+    </section>
+
+    <section class="card">
+      <h2>Opened</h2>
+      <ul id="opened" class="opened"><li class="muted">Nothing has opened yet.</li></ul>
+    </section>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+
+    const $ = (id) => document.getElementById(id);
+    let wake = 0;          // timer for the moment the next capsule opens
+    let seen = null;       // ids already shown, so only new ones pop
+
+    function when(ms) {
+      const mins = Math.max(1, Math.round(ms / 60000));
+      if (mins < 90) return `${mins} min`;
+      if (mins < 48 * 60) return `${Math.round(mins / 60)} hours`;
+      return `${Math.round(mins / 1440)} days`;
+    }
+    function day(ms) {
+      return new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
+
+    on("capsule", (msg) => {
+      $("make").hidden = false;
+      const lead = msg.sealed === 1 ? "1 capsule is sealed" : `${msg.sealed} capsules are sealed`;
+      $("shelf").textContent = msg.sealed
+        ? `${lead}. The next one opens in ${when(msg.next - msg.now)}.`
+        : "The shelf is empty. Seal the first one.";
+
+      const list = $("opened");
+      list.replaceChildren();
+      if (!msg.opened.length) {
+        const li = document.createElement("li");
+        li.className = "muted";
+        li.textContent = "Nothing has opened yet.";
+        list.append(li);
+      }
+      for (const c of msg.opened) {
+        const li = document.createElement("li");
+        if (seen && !seen.has(c.id)) li.className = "fresh";
+        const p = document.createElement("p");
+        p.textContent = c.text;                       // visitor text: textContent only
+        const meta = document.createElement("span");
+        meta.className = "muted";
+        meta.textContent = `Sealed ${day(c.at)}, opened ${day(c.opens)}.  `;
+        const report = document.createElement("button");
+        report.type = "button";
+        report.className = "secondary";
+        report.textContent = "Report";
+        report.addEventListener("click", () => {
+          if (!confirm("Report this message?  Two reports hide it.")) return;
+          send({ type: "report-capsule", id: c.id });
+          report.textContent = "Reported";
+          report.disabled = true;
+        });
+        li.append(p, meta, report);
+        list.append(li);
+      }
+      seen = new Set(msg.opened.map((c) => c.id));
+
+      // Ask again the moment the next one is due (setTimeout can't wait more than ~24 days).
+      clearTimeout(wake);
+      if (msg.next) wake = setTimeout(() => send({ type: "capsule-get" }), Math.min(msg.next - msg.now + 1500, 2 ** 30));
+    });
+
+    $("text").addEventListener("input", () => { $("count").textContent = `${$("text").value.length} / 200`; });
+
+    $("seal").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = $("text").value.trim();
+      const days = Number(new FormData($("seal")).get("days"));
+      if (!text) return;
+      if (!send({ type: "capsule-seal", text, days })) $("notice").textContent = "Not connected yet.  Try again in a moment.";
+    });
+    on("capsule-sealed", (msg) => {
+      $("text").value = "";
+      $("count").textContent = "0 / 200";
+      $("sent").hidden = false;
+      $("sent").textContent = `⏳ Sealed.  It opens for everyone on ${day(msg.opens)}.`;
+      $("notice").textContent = "";
+    });
+    on("notice", (msg) => { if (msg.about === "capsule") $("notice").textContent = msg.text; });
+  </script>
+</body>
+</html>
