@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Likelihood ratios for classic forensic evidence, with the working shown.">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#1f2d3d">
+</head>
+<body>
+<p style="max-width:1180px;margin:16px auto 0;font-size:0.9rem"><a href="../">← The lab</a></p>
+<title>Evidence Lab · The lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: a lab bench. Module tabs across the top, inputs on the left, findings on the right. */
+:root {
+  --bg: #f2f4f6; --surface: #ffffff; --sunk: #f7f9fa; --ink: #121a22; --muted: #536070; --faint: #7f8996;
+  --rule: #d7dde4; --band: #e8ecf0; --band-2: #dde3e9;
+  --hp: #2a78d6; --hp-soft: rgba(42, 120, 214, 0.16);
+  --hd: #eb6834; --hd-soft: rgba(235, 104, 52, 0.16);
+  --accent: #2a78d6;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1116; --surface: #141a21; --sunk: #10151b; --ink: #e7ecf1; --muted: #a0abb7; --faint: #6f7a87;
+    --rule: #27303a; --band: #19212a; --band-2: #1f2832;
+    --hp: #3987e5; --hp-soft: rgba(57, 135, 229, 0.22); --hd: #e0612d; --hd-soft: rgba(224, 97, 45, 0.22);
+    --accent: #3987e5; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1116; --surface: #141a21; --sunk: #10151b; --ink: #e7ecf1; --muted: #a0abb7; --faint: #6f7a87;
+  --rule: #27303a; --band: #19212a; --band-2: #1f2832;
+  --hp: #3987e5; --hp-soft: rgba(57, 135, 229, 0.22); --hd: #e0612d; --hd-soft: rgba(224, 97, 45, 0.22);
+  --accent: #3987e5; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+}
+.app { max-width: 1180px; margin: 0 auto; padding-block: 28px 56px; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); line-height: 1.05; font-weight: 700; }
+h2 { font-size: 1.6rem; line-height: 1.15; font-weight: 600; }
+h3 { font-size: 0.95rem; font-family: var(--font-body); font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+.num, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .small { font-size: 0.84rem; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+header.top { display: grid; gap: 8px; }
+header.top .lede { max-width: 70ch; color: var(--muted); font-size: 1.02rem; }
+.hp-c { color: var(--hp); } .hd-c { color: var(--hd); }
+
+nav.modules { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; border-bottom: 1px solid var(--rule); }
+nav.modules button {
+  font: inherit; font-size: 0.92rem; white-space: nowrap; cursor: pointer; background: none; color: var(--muted);
+  border: none; border-bottom: 3px solid transparent; padding: 8px 10px 9px; display: inline-flex; gap: 8px; align-items: baseline;
+}
+nav.modules button .mono { font-size: 0.74rem; color: var(--faint); }
+nav.modules button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+.module { display: grid; gap: 16px; }
+.mod-head { display: grid; gap: 6px; max-width: 78ch; }
+.mod-grid { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .mod-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.inputs fieldset { border: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.inputs legend { font-weight: 600; font-size: 0.9rem; margin-bottom: 4px; padding: 0; }
+.field { display: grid; gap: 3px; }
+.field label { font-size: 0.86rem; color: var(--muted); }
+.field .hint { font-size: 0.76rem; color: var(--faint); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+input[type="number"], input[type="text"], select {
+  font: inherit; font-family: var(--font-mono); font-size: 0.92rem; width: 100%; min-width: 0;
+  background: var(--sunk); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px;
+}
+select { font-family: var(--font-body); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 0.9rem; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; }
+.seg button { font: inherit; font-size: 0.86rem; padding: 5px 10px; border: none; background: var(--surface); color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.lr-card { display: grid; gap: 6px; }
+.lr-top { display: flex; flex-wrap: wrap; gap: 4px 22px; align-items: baseline; }
+.lr-value { font-family: var(--font-display); font-size: clamp(2.2rem, 5vw, 3rem); font-weight: 700; line-height: 1; }
+.lr-sub { font-family: var(--font-mono); font-size: 0.86rem; color: var(--muted); }
+.lr-words { font-size: 1rem; }
+.lr-words b { font-weight: 600; }
+.props { display: grid; gap: 2px; font-size: 0.86rem; color: var(--muted); }
+.props span b { font-family: var(--font-mono); font-weight: 500; }
+.working { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; font-size: 0.9rem; }
+.working li { padding-left: 2px; }
+.working code { font-family: var(--font-mono); font-size: 0.85rem; background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px; padding: 0 4px; white-space: normal; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+details.work summary { cursor: pointer; font-weight: 600; font-size: 0.92rem; }
+details.work[open] summary { margin-bottom: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 4px; padding: 7px 12px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); font-weight: 500; }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--rule); }
+.toast { font-size: 0.86rem; color: var(--muted); }
+.ref { font-size: 0.82rem; color: var(--faint); }
+.note { border-left: 3px solid var(--rule); padding: 2px 0 2px 12px; font-size: 0.9rem; color: var(--muted); max-width: 75ch; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { border-top: 2px solid var(--ink); padding-top: 6px; display: grid; gap: 1px; }
+.stat .v { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; line-height: 1.15; }
+.stat .l { font-size: 0.8rem; color: var(--muted); }
+
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; overflow: visible; max-width: 100%; height: auto; }
+.panel > *, .lr-card > *, .mod-grid > * { min-width: 0; }
+.chart text { fill: var(--muted); font-family: var(--font-body); font-size: 11px; }
+.tip { position: absolute; pointer-events: none; z-index: 2; background: var(--surface); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 4px; padding: 5px 8px; font-size: 12px; line-height: 1.4; box-shadow: 0 4px 14px rgba(0,0,0,0.12); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.8rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+
+table.loci { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+table.loci th { text-align: left; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; padding: 4px 4px; }
+table.loci td { padding: 3px 4px; }
+table.loci input { padding: 4px 6px; }
+table.loci td.f { font-family: var(--font-mono); font-size: 0.82rem; text-align: right; color: var(--muted); white-space: nowrap; }
+.icon-btn { font: inherit; border: 1px solid var(--rule); background: var(--surface); color: var(--muted); border-radius: 4px; cursor: pointer; padding: 2px 8px; }
+.table-wrap { overflow-x: auto; }
+table.case { border-collapse: collapse; width: 100%; font-size: 0.9rem; min-width: 460px; }
+table.case th, table.case td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--rule); }
+table.case th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+table.case td.n { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+.tag { font-family: var(--font-mono); font-size: 0.72rem; border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; color: var(--muted); margin-left: 6px; }
+footer { border-top: 1px solid var(--rule); padding-top: 14px; font-size: 0.82rem; color: var(--faint); display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <span class="eyebrow">Forensic evidence workbench</span>
+    <h1>Evidence Lab</h1>
+    <p class="lede">Work out how strongly a piece of evidence supports one account over another, the way forensic scientists report it: as a likelihood ratio, with every step of the working shown. Methods follow Adam (2010), <i>Essential Mathematics and Statistics for Forensic Science</i>.</p>
+  </header>
+
+  <nav class="modules" role="tablist" aria-label="Evidence types" id="nav"></nav>
+
+  <!-- Measurement match -->
+  <section class="module" id="mod-measure" role="tabpanel" hidden>
+    <div class="mod-head">
+      <h2>Measurement match</h2>
+      <p class="muted">A fragment, hair or sample is measured and compared with a known source and with the wider population. Glass refractive index is the classic case.</p>
+    </div>
+    <div class="mod-grid">
+      <form class="panel inputs" id="f-measure" autocomplete="off">
+        <div class="field"><label for="m-preset">Example</label><select id="m-preset"></select></div>
+        <fieldset><legend>Questioned item</legend>
+          <div class="field"><label for="m-what">What was measured</label><input id="m-what" type="text"></div>
+          <div class="field"><label for="m-x">Measured value x</label><input id="m-x" type="number" step="any"></div>
+          <div class="field"><label>Method</label>
+            <div class="seg" role="group" aria-label="Method"><button type="button" id="m-meth-d" aria-pressed="true">Density</button><button type="button" id="m-meth-i" aria-pressed="false">Interval ±Δ</button></div>
+            <span class="hint">Density uses the heights of the curves at x (Adam §11.6.3). Interval uses the probability of landing within x ± Δ (§11.6.1–2).</span>
+          </div>
+          <div class="field" id="m-delta-row" hidden><label for="m-delta">Δ (half-width of the match window)</label><input id="m-delta" type="number" step="any"></div>
+        </fieldset>
+        <fieldset><legend><span class="hp-c">Control</span>: the known source</legend>
+          <label class="check" id="m-indist-row" hidden><input type="checkbox" id="m-indist"> Declared indistinguishable, so P(E|Hp) = 1</label>
+          <div class="row2"><div class="field"><label for="m-cm">Mean x̄</label><input id="m-cm" type="number" step="any"></div>
+          <div class="field"><label for="m-cs">Std. dev. s</label><input id="m-cs" type="number" step="any" min="0"></div></div>
+        </fieldset>
+        <fieldset><legend><span class="hd-c">Population</span>: where else it could come from</legend>
+          <div class="row2"><div class="field"><label for="m-pm">Mean μ</label><input id="m-pm" type="number" step="any"></div>
+          <div class="field"><label for="m-ps">Std. dev. σ</label><input id="m-ps" type="number" step="any" min="0"></div></div>
+          <span class="hint" id="m-source"></span>
+        </fieldset>
+      </form>
+      <div class="panel" aria-live="polite">
+        <div class="lr-card" id="r-measure"></div>
+        <div class="legend"><span><span class="sw" style="background:var(--hp)"></span>Control source (Hp)</span><span><span class="sw" style="background:var(--hd)"></span>Population (Hd)</span><span><span class="sw" style="background:var(--ink)"></span>Questioned value</span></div>
+        <div class="chart" id="c-measure"></div>
+        <details class="work" open><summary>Working</summary><ol class="working" id="w-measure"></ol></details>
+        <div class="actions"><button class="btn" type="button" data-add="measure">Add to case</button><span class="toast" id="t-measure"></span></div>
+        <p class="ref">Read: Adam (2010) §11.6. Density method after Evett (1986).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Transfer -->
+  <section class="module" id="mod-transfer" role="tabpanel" hidden>
+    <div class="mod-head">
+      <h2>Transfer evidence</h2>
+      <p class="muted">Fibres or glass fragments are found on a suspect. They could have been transferred during the alleged contact, or picked up innocently some other time. Evett's model weighs both routes.</p>
+    </div>
+    <div class="mod-grid">
+      <form class="panel inputs" id="f-transfer" autocomplete="off">
+        <div class="field"><label for="tr-preset">Example</label><select id="tr-preset"></select></div>
+        <fieldset><legend>What was found</legend>
+          <div class="row2"><div class="field"><label for="tr-what">Items</label><input id="tr-what" type="text"></div>
+          <div class="field"><label for="tr-n">How many (n)</label><input id="tr-n" type="text"></div></div>
+        </fieldset>
+        <fieldset><legend><span class="hp-c">Transfer</span> (reconstruction experiments)</legend>
+          <div class="row2"><div class="field"><label for="tr-t0">t₀: none transferred</label><input id="tr-t0" type="number" step="any" min="0" max="1"></div>
+          <div class="field"><label for="tr-tn">tₙ: n transferred</label><input id="tr-tn" type="number" step="any" min="0" max="1"></div></div>
+        </fieldset>
+        <fieldset><legend><span class="hd-c">Background</span> (surveys of clothing)</legend>
+          <div class="row2"><div class="field"><label for="tr-b0">b₀: none there by chance</label><input id="tr-b0" type="number" step="any" min="0" max="1"></div>
+          <div class="field"><label for="tr-bn">bₙ: n there by chance</label><input id="tr-bn" type="number" step="any" min="0" max="1"></div></div>
+        </fieldset>
+        <fieldset><legend>Matching</legend>
+          <div class="row2"><div class="field"><label for="tr-p">p: chance item matches by type</label><input id="tr-p" type="number" step="any" min="0" max="1"></div>
+          <div class="field"><label for="tr-pc">p꜀: transferred item matches</label><input id="tr-pc" type="number" step="any" min="0" max="1"></div></div>
+          <span class="hint">Set p = 1 and p꜀ = 1 to ignore the type, then add a Measurement match separately. p꜀/p is that measurement's likelihood ratio.</span>
+        </fieldset>
+      </form>
+      <div class="panel" aria-live="polite">
+        <div class="lr-card" id="r-transfer"></div>
+        <div class="legend"><span><span class="sw" style="background:var(--hp);height:9px"></span>P(E|Hp) by transfer</span><span><span class="sw" style="background:var(--hp);opacity:.45;height:9px"></span>P(E|Hp) by chance anyway</span><span><span class="sw" style="background:var(--hd);height:9px"></span>P(E|Hd) by chance</span></div>
+        <div class="chart" id="c-transfer"></div>
+        <details class="work" open><summary>Working</summary><ol class="working" id="w-transfer"></ol></details>
+        <div class="actions"><button class="btn" type="button" data-add="transfer">Add to case</button><span class="toast" id="t-transfer"></span></div>
+        <p class="ref">Read: Adam (2010) §11.7, after Evett (1984, 1986). The book's fibre worked problem substitutes t₀ = 0.1 instead of the stated 1%; with t₀ = 0.01 its answers are 1.51 and 13.7.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DNA -->
+  <section class="module" id="mod-dna" role="tabpanel" hidden>
+    <div class="mod-head">
+      <h2>DNA profile</h2>
+      <p class="muted">Each locus contributes a genotype frequency from allele frequencies (Hardy–Weinberg), adjusted for shared ancestry within subpopulations (Balding–Nichols θ). Loci multiply, so their weights of evidence add.</p>
+    </div>
+    <div class="mod-grid">
+      <form class="panel inputs" id="f-dna" autocomplete="off">
+        <div class="field"><label for="d-preset">Example</label><select id="d-preset"></select></div>
+        <div class="table-wrap"><table class="loci"><thead><tr><th>Locus</th><th>Allele 1 freq.</th><th>Allele 2 freq.</th><th></th></tr></thead><tbody id="d-rows"></tbody></table></div>
+        <div class="actions"><button type="button" class="btn ghost" id="d-addrow">Add locus</button><span class="hint small muted">Leave allele 2 blank for a homozygote.</span></div>
+        <div class="field"><label for="d-theta">θ, subpopulation correction: <span class="num" id="d-theta-v"></span></label><input id="d-theta" type="range" min="0" max="0.05" step="0.005"><span class="hint">0 is plain Hardy–Weinberg. 0.01–0.03 is typical.</span></div>
+        <div class="field"><label for="d-pop">Population that could be the source</label><input id="d-pop" type="number" step="1" min="2"></div>
+      </form>
+      <div class="panel" aria-live="polite">
+        <div class="lr-card" id="r-dna"></div>
+        <div class="stats" id="s-dna"></div>
+        <p class="note" id="n-dna"></p>
+        <h3>Weight of evidence by locus <span class="muted small">(bans = log₁₀ 1/frequency; they add up)</span></h3>
+        <div class="chart" id="c-dna"></div>
+        <details class="work"><summary>Working</summary><ol class="working" id="w-dna"></ol></details>
+        <div class="actions"><button class="btn" type="button" data-add="dna">Add to case</button><span class="toast" id="t-dna"></span></div>
+        <p class="ref">Read: Adam (2010) §8.4–8.6 (Balding and Nichols 1994). Example allele frequencies are invented for practice, not real population data.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cooling -->
+  <section class="module" id="mod-cooling" role="tabpanel" hidden>
+    <div class="mod-head">
+      <h2>Time since death</h2>
+      <p class="muted">Body temperature falls in a predictable way after death, so one reading gives an estimate of when death occurred. Every input uncertainty widens that estimate, and the shape of the cooling curve stretches some of them far more than others.</p>
+    </div>
+    <div class="mod-grid">
+      <form class="panel inputs" id="f-cooling" autocomplete="off">
+        <div class="field"><label for="co-preset">Example</label><select id="co-preset"></select></div>
+        <div class="field"><label>Model</label><div class="seg" role="group" aria-label="Cooling model"><button type="button" id="co-rectal" aria-pressed="true">Rectal (two-exponential)</button><button type="button" id="co-forehead" aria-pressed="false">Forehead skin</button></div></div>
+        <div class="row2"><div class="field"><label for="co-T">Body temperature (°C)</label><input id="co-T" type="number" step="any"></div>
+        <div class="field"><label for="co-Tsd">± uncertainty</label><input id="co-Tsd" type="number" step="any" min="0"></div></div>
+        <div class="row2"><div class="field"><label for="co-TE">Surroundings (°C)</label><input id="co-TE" type="number" step="any"></div>
+        <div class="field"><label for="co-TEsd">± uncertainty</label><input id="co-TEsd" type="number" step="any" min="0"></div></div>
+        <div class="row2" id="co-mass-row"><div class="field"><label for="co-M">Body mass (kg)</label><input id="co-M" type="number" step="any" min="5"></div>
+        <div class="field"><label for="co-Msd">± uncertainty</label><input id="co-Msd" type="number" step="any" min="0"></div></div>
+        <div class="row2" id="co-z-row" hidden><div class="field"><label for="co-Z">Rate constant Z (per hour)</label><input id="co-Z" type="number" step="any" min="0"></div>
+        <div class="field"><label for="co-Zsd">± uncertainty</label><input id="co-Zsd" type="number" step="any" min="0"></div></div>
+        <span class="hint" id="co-model-hint"></span>
+      </form>
+      <div class="panel" aria-live="polite">
+        <div class="stats" id="s-cooling"></div>
+        <div class="legend"><span><span class="sw" style="background:var(--ink)"></span>Cooling curve</span><span><span class="sw" style="background:var(--hp);height:9px;opacity:.5"></span>Measured temperature ± 2 sd, and the 95% time range</span></div>
+        <div class="chart" id="c-cooling"></div>
+        <div class="legend"><span><span class="sw" style="background:var(--hp);height:9px;opacity:.5"></span>All uncertainties (20,000 samples)</span><span><span class="sw" style="background:var(--hd)"></span>Thermometer error only: N(T(t)) × |dT/dt|</span></div>
+        <div class="chart" id="c-cooling-d"></div>
+        <p class="note" id="n-cooling"></p>
+        <p class="ref">Read: Adam (2010) §3.5 (Marshall and Hoare 1962; simplified two-exponential form after Henssge and Madea 2004). Teaching model only. Casework uses the full Henssge nomogram with corrective factors.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Explanations -->
+  <section class="module" id="mod-explain" role="tabpanel" hidden>
+    <div class="mod-head">
+      <h2>Competing explanations</h2>
+      <p class="muted">When two explanations both account for what happened, the evidence cannot separate them (LR = 1). What matters is how probable each explanation is in the first place, and whether a second event depends on the first.</p>
+    </div>
+    <div class="mod-grid">
+      <form class="panel inputs" id="f-explain" autocomplete="off">
+        <div class="field"><label for="x-preset">Example</label><select id="x-preset"></select></div>
+        <fieldset><legend><span class="hp-c">Explanation A</span></legend>
+          <div class="field"><label for="x-an">Name</label><input id="x-an" type="text"></div>
+          <div class="row2"><div class="field"><label for="x-a1">P(first event)</label><input id="x-a1" type="text"></div>
+          <div class="field"><label for="x-a2">P(second | first)</label><input id="x-a2" type="text"></div></div>
+        </fieldset>
+        <fieldset><legend><span class="hd-c">Explanation B</span></legend>
+          <div class="field"><label for="x-bn">Name</label><input id="x-bn" type="text"></div>
+          <div class="row2"><div class="field"><label for="x-b1">P(first event)</label><input id="x-b1" type="text"></div>
+          <div class="field"><label for="x-b2">P(second | first)</label><input id="x-b2" type="text"></div></div>
+          <span class="hint">Probabilities can be typed as 0.004, 1/1300 or 5.7/1300.</span>
+        </fieldset>
+      </form>
+      <div class="panel" aria-live="polite">
+        <div class="stats" id="s-explain"></div>
+        <h3>Probability of both events, under each explanation</h3>
+        <div class="legend"><span><span class="sw" style="background:var(--hp);height:9px"></span>A</span><span><span class="sw" style="background:var(--hd);height:9px"></span>B</span><span><span class="sw" style="background:var(--faint);height:9px;opacity:.5"></span>If the second event were wrongly treated as independent</span></div>
+        <div class="chart" id="c-explain"></div>
+        <details class="work" open><summary>Working</summary><ol class="working" id="w-explain"></ol></details>
+        <p class="note">The probability of the events given an explanation is not the probability of the explanation given the events. Swapping the two is the prosecutor's fallacy, and it is one of the errors behind the Sally Clark conviction.</p>
+        <p class="ref">Read: Adam (2010) §11.8, with figures from Dawid (2002) and Hill (2004).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Case -->
+  <section class="module" id="mod-case" role="tabpanel" hidden>
+    <div class="mod-head">
+      <h2>Case summary</h2>
+      <p class="muted">Combine items with Bayes' rule: posterior odds = prior odds × LR₁ × LR₂ × …. On the log scale each item adds its weight in bans to the starting log-odds.</p>
+    </div>
+    <div class="mod-grid">
+      <form class="panel inputs" id="f-case" autocomplete="off">
+        <fieldset><legend>Before any of this evidence</legend>
+          <div class="field"><label for="k-pop">The offender is one of this many people</label><input id="k-pop" type="number" step="1" min="2"><span class="hint">Everyone equally likely: prior probability 1/N.</span></div>
+        </fieldset>
+        <fieldset><legend>Add a likelihood ratio by hand</legend>
+          <div class="field"><label for="k-name">Item</label><input id="k-name" type="text" placeholder="e.g. Shoe mark"></div>
+          <div class="field"><label for="k-lr">Likelihood ratio</label><input id="k-lr" type="text" placeholder="e.g. 50 or 1/4"></div>
+          <div class="actions"><button type="button" class="btn ghost" id="k-add">Add item</button><span class="toast" id="t-case"></span></div>
+        </fieldset>
+        <p class="hint small muted">Items also arrive from the other modules' “Add to case” buttons.</p>
+      </form>
+      <div class="panel" aria-live="polite">
+        <div class="table-wrap"><table class="case"><thead><tr><th>Item</th><th style="text-align:right">LR</th><th style="text-align:right">Bans</th><th></th></tr></thead><tbody id="k-rows"></tbody></table></div>
+        <div class="stats" id="s-case"></div>
+        <h3>From prior to posterior, in bans (log₁₀ odds)</h3>
+        <div class="chart" id="c-case"></div>
+        <p class="note">Multiplying is only valid when items are independent given each proposition. A glass refractive index and the number of fragments, for example, should be combined through the transfer model, not multiplied twice. A likelihood ratio says how much the evidence shifts the odds. It does not say how probable guilt is without the prior.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Evidence Lab · Python engine and this page share one set of test cases. Teaching tool: numbers in examples are illustrative unless a source is named.</span>
+    <span>Verbal scale: ENFSI Guideline for Evaluative Reporting in Forensic Science (2015), pp. 16–17. Weight of evidence in bans: Adam (2010), Table 11.1.</span>
+  </footer>
+</div>
+
+<script>/* evidence_lab browser engine: a line-for-line port of the Python package.
+ * Every function here is checked against tests/vectors.json (run: node web/test_engine.js).
+ * References: Adam (2010) Essential Mathematics and Statistics for Forensic Science;
+ * ENFSI Guideline for Evaluative Reporting (2015). */
+(function (root) {
+  "use strict";
+  const SQRT2 = Math.SQRT2, SQRTPI = Math.sqrt(Math.PI);
+
+  // ---- special functions ----
+  function erfSeries(x) {
+    // erf(x) = 2/sqrt(pi) e^{-x^2} sum 2^n x^{2n+1} / (1*3*...*(2n+1)); all terms positive.
+    let term = x, sum = x;
+    const x2 = x * x;
+    for (let n = 0; n < 200; n++) {
+      term *= (2 * x2) / (2 * n + 3);
+      sum += term;
+      if (term < 1e-17 * sum) break;
+    }
+    return (2 / SQRTPI) * Math.exp(-x2) * sum;
+  }
+  function erfcCF(x) {
+    // erfc(x) = e^{-x^2}/sqrt(pi) * 1/(x + (1/2)/(x + 1/(x + (3/2)/(x + 2/(x + ...))))), modified Lentz.
+    const tiny = 1e-300;
+    let f = x, C = x, D = 0;
+    for (let k = 1; k < 5000; k++) {
+      const a = k / 2;
+      D = x + a * D; if (Math.abs(D) < tiny) D = tiny; D = 1 / D;
+      C = x + a / C; if (Math.abs(C) < tiny) C = tiny;
+      const delta = C * D;
+      f *= delta;
+      if (Math.abs(delta - 1) < 1e-16) break;
+    }
+    return Math.exp(-x * x) / SQRTPI / f;
+  }
+  function erfc(x) {
+    if (x < 0) return 2 - erfc(-x);
+    if (x < 2) return 1 - erfSeries(x);
+    return erfcCF(x);
+  }
+  const upperTail = (z) => 0.5 * erfc(z / SQRT2);
+  function normInterval(lo, hi, mu, sd) {
+    const a = (lo - mu) / sd, b = (hi - mu) / sd;
+    if (a >= 0) return upperTail(a) - upperTail(b);
+    if (b <= 0) return upperTail(-b) - upperTail(-a);
+    return 1 - upperTail(b) - upperTail(-a);
+  }
+  function normPdf(x, mu, sd) {
+    const z = (x - mu) / sd;
+    return Math.exp(-0.5 * z * z) / (sd * Math.sqrt(2 * Math.PI));
+  }
+
+  // ---- reporting ----
+  const ENFSI = [[2, "weak support"], [10, "moderate support"], [100, "moderately strong support"],
+    [1000, "strong support"], [10000, "very strong support"], [1000000, "extremely strong support"]];
+  function verbal(lr, hp, hd) {
+    hp = hp || "the first proposition"; hd = hd || "the alternative";
+    if (!(lr > 0)) return "undefined";
+    if (!isFinite(lr)) return "conclusive support for " + hp;
+    const x = lr >= 1 ? lr : 1 / lr;
+    let phrase = null;
+    for (const [bound, words] of ENFSI) if (x >= bound) phrase = words;
+    if (phrase === null) return "no meaningful support for either proposition";
+    return phrase + " for " + (lr >= 1 ? hp : hd);
+  }
+  const bans = (lr) => Math.log10(lr);
+  const oddsToProb = (o) => (isFinite(o) ? o / (1 + o) : 1);
+  function combine(lrs, priorOdds) {
+    const lr = lrs.reduce((a, b) => a * b, 1);
+    const out = { lr, bans: bans(lr) };
+    if (priorOdds != null) { out.posteriorOdds = priorOdds * lr; out.posteriorProb = oddsToProb(out.posteriorOdds); }
+    return out;
+  }
+
+  // ---- measurement (Adam 11.6) ----
+  function lrInterval(q, halfWidth, popMean, popSd, controlMean, controlSd) {
+    const lo = q - halfWidth, hi = q + halfWidth;
+    const den = normInterval(lo, hi, popMean, popSd);
+    const num = controlMean == null ? 1 : normInterval(lo, hi, controlMean, controlSd);
+    return { lr: num / den, num, den, lo, hi };
+  }
+  function lrDensity(q, controlMean, controlSd, popMean, popSd) {
+    const zs = (q - controlMean) / controlSd, zp = (q - popMean) / popSd;
+    return { lr: (popSd / controlSd) * Math.exp(0.5 * (zp * zp - zs * zs)), zs, zp,
+      fControl: normPdf(q, controlMean, controlSd), fPop: normPdf(q, popMean, popSd) };
+  }
+
+  // ---- transfer (Adam 11.7, Evett) ----
+  function lrTransfer(t0, tn, b0, bn, p, pc) {
+    if (pc == null) pc = 1;
+    const num = t0 * bn * p + tn * b0 * pc, den = bn * p;
+    return { lr: num / den, num, den, transferTerm: (tn * b0 * pc) / den, chanceTerm: t0 };
+  }
+
+  // ---- DNA (Adam 8.4-8.6) ----
+  function genotypeFrequency(p, q, theta) {
+    const t = theta || 0, d = (1 + t) * (1 + 2 * t);
+    if (q == null) return ((2 * t + (1 - t) * p) * (3 * t + (1 - t) * p)) / d;
+    return (2 * (t + (1 - t) * p) * (t + (1 - t) * q)) / d;
+  }
+  function lrDna(loci, theta, population) {
+    const freqs = loci.map((l) => genotypeFrequency(l[0], l.length > 1 ? l[1] : null, theta));
+    const match = freqs.reduce((a, b) => a * b, 1);
+    const out = { lr: 1 / match, match, freqs };
+    if (population) {
+      out.expected = (population - 1) * match;
+      out.pOther = -Math.expm1((population - 1) * Math.log1p(-match));
+      out.pSource = 1 / (1 + out.expected);
+    }
+    return out;
+  }
+
+  // ---- body cooling (Adam 3.5) ----
+  const FOREHEAD_T0 = 33.0, FOREHEAD_Z = 0.1, RECTAL_T0 = 37.2, T_MAX = 120.0;
+  function ratesFromMass(M) { const Z = 1.2815 * Math.pow(M, -0.625) - 0.0284; return [Z, 10 * Z]; }
+  function tempSingle(t, TE, T0, Z) { T0 = T0 ?? FOREHEAD_T0; Z = Z ?? FOREHEAD_Z; return TE + (T0 - TE) * Math.exp(-Z * t); }
+  function dtempSingle(t, TE, T0, Z) { T0 = T0 ?? FOREHEAD_T0; Z = Z ?? FOREHEAD_Z; return -Z * (T0 - TE) * Math.exp(-Z * t); }
+  function tempDouble(t, TE, M, T0) {
+    T0 = T0 ?? RECTAL_T0; const [Z, p] = ratesFromMass(M);
+    return TE + (T0 - TE) * ((p / (p - Z)) * Math.exp(-Z * t) - (Z / (p - Z)) * Math.exp(-p * t));
+  }
+  function dtempDouble(t, TE, M, T0) {
+    T0 = T0 ?? RECTAL_T0; const [Z, p] = ratesFromMass(M);
+    return (T0 - TE) * ((-p * Z) / (p - Z)) * (Math.exp(-Z * t) - Math.exp(-p * t));
+  }
+  function timeSingle(T, TE, T0, Z) {
+    T0 = T0 ?? FOREHEAD_T0; Z = Z ?? FOREHEAD_Z;
+    if (T <= TE) return NaN;
+    if (T >= T0) return 0;
+    return Math.log((T0 - TE) / (T - TE)) / Z;
+  }
+  function timeDouble(T, TE, M, T0) {
+    T0 = T0 ?? RECTAL_T0;
+    if (T <= TE) return NaN;
+    if (T >= T0) return 0;
+    if (tempDouble(T_MAX, TE, M, T0) > T) return NaN;
+    let lo = 0, hi = T_MAX;
+    for (let i = 0; i < 80; i++) {
+      const mid = 0.5 * (lo + hi);
+      if (tempDouble(mid, TE, M, T0) > T) lo = mid; else hi = mid;
+    }
+    return 0.5 * (lo + hi);
+  }
+  function linspace(a, b, n) { const out = new Array(n); for (let i = 0; i < n; i++) out[i] = a + ((b - a) * i) / (n - 1); return out; }
+  function trapz(y, x) { let s = 0; for (let i = 1; i < x.length; i++) s += 0.5 * (y[i] + y[i - 1]) * (x[i] - x[i - 1]); return s; }
+  function jacobianDensity(model, grid, T, Tsd, TE, M, Z) {
+    const dens = grid.map((t) => {
+      const Tt = model === "forehead" ? tempSingle(t, TE, FOREHEAD_T0, Z) : tempDouble(t, TE, M);
+      const dT = model === "forehead" ? dtempSingle(t, TE, FOREHEAD_T0, Z) : dtempDouble(t, TE, M);
+      const z = (Tt - T) / Tsd;
+      return Math.exp(-0.5 * z * z) * Math.abs(dT);
+    });
+    const area = trapz(dens, grid);
+    return area > 0 ? dens.map((d) => d / area) : dens;
+  }
+  // Seeded sampler for the Monte Carlo view (not part of the shared vectors).
+  function rng(seed) {
+    let a = seed >>> 0;
+    const uni = () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    let spare = null;
+    const normal = () => {
+      if (spare !== null) { const s = spare; spare = null; return s; }
+      let u = 0, v = 0; while (u === 0) u = uni(); v = uni();
+      const r = Math.sqrt(-2 * Math.log(u)); spare = r * Math.sin(2 * Math.PI * v); return r * Math.cos(2 * Math.PI * v);
+    };
+    return { uni, normal };
+  }
+  function monteCarlo(o) {
+    const g = rng(o.seed || 1), n = o.n || 20000, out = [];
+    let bad = 0;
+    for (let i = 0; i < n; i++) {
+      const T = o.T + o.Tsd * g.normal(), TE = o.TE + (o.TEsd || 0) * g.normal();
+      let t;
+      if (o.model === "forehead") t = timeSingle(T, TE, FOREHEAD_T0, Math.max(1e-6, o.Z + (o.Zsd || 0) * g.normal()));
+      else t = timeDouble(T, TE, Math.max(5, o.M + (o.Msd || 0) * g.normal()));
+      if (isFinite(t)) out.push(t); else bad++;
+    }
+    out.sort((a, b) => a - b);
+    const q = (p) => out.length ? out[Math.min(out.length - 1, Math.floor(p * out.length))] : NaN;
+    return { samples: out, unsolvable: bad / n, p2_5: q(0.025), p16: q(0.16), median: q(0.5), p84: q(0.84), p97_5: q(0.975) };
+  }
+
+  // ---- competing explanations (Adam 11.8) ----
+  function compare(aFirst, aSecond, bFirst, bSecond, independent) {
+    const a2 = independent ? aFirst : aSecond, b2 = independent ? bFirst : bSecond;
+    const pa = aFirst * a2, pb = bFirst * b2, odds = pa / pb;
+    return { odds, prob: oddsToProb(odds), pa, pb };
+  }
+
+  const api = { erfc, upperTail, normInterval, normPdf, verbal, bans, oddsToProb, combine,
+    lrInterval, lrDensity, lrTransfer, genotypeFrequency, lrDna,
+    ratesFromMass, tempSingle, dtempSingle, tempDouble, dtempDouble, timeSingle, timeDouble,
+    linspace, trapz, jacobianDensity, monteCarlo, compare,
+    constants: { FOREHEAD_T0, FOREHEAD_Z, RECTAL_T0, T_MAX } };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.EvidenceLab = api;
+})(typeof self !== "undefined" ? self : this);
+</script>
+<script>
+(function () {
+"use strict";
+const E = window.EvidenceLab, NS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+
+// ---------- formatting ----------
+function fmt(x, sig = 4) {
+  if (x === 0) return "0";
+  if (!isFinite(x)) return x > 0 ? "∞" : "—";
+  const a = Math.abs(x);
+  if (a >= 1e-4 && a < 1e6) return String(Number(x.toPrecision(sig)));
+  const [m, e] = x.toExponential(sig - 1).split("e");
+  return `${m}×10${sup(+e)}`;
+}
+function sup(n) { const m = "⁰¹²³⁴⁵⁶⁷⁸⁹"; return (n < 0 ? "⁻" : "") + String(Math.abs(n)).split("").map((d) => m[+d]).join(""); }
+const fv = (x) => String(Number(x.toPrecision(8)));
+function fmtLR(lr) {
+  if (!(lr > 0)) return "—";
+  if (lr < 1) return "1/" + fmtLR(1 / lr);
+  if (lr < 10) return lr.toFixed(2).replace(/\.?0+$/, "");
+  if (lr < 1e6) return Math.round(lr).toLocaleString("en-US");
+  return fmt(lr, 3);
+}
+function oneIn(p) { const n = 1 / p; return n < 1e6 ? Math.round(n).toLocaleString("en-US") : fmt(n, 3); }
+function parseNum(s) {
+  s = String(s).trim(); if (!s) return NaN;
+  if (s.endsWith("%")) return parseFloat(s) / 100;
+  if (s.includes("/")) { const [a, b] = s.split("/"); return parseFloat(a) / parseFloat(b); }
+  return parseFloat(s);
+}
+const val = (id) => parseNum($(id).value);
+const code = (s) => `<code>${s}</code>`;
+
+// ---------- svg helpers ----------
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs || {}) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function txt(parent, x, y, s, attrs) { const t = el("text", Object.assign({ x, y }, attrs || {}), parent); t.textContent = s; return t; }
+function lin(d0, d1, r0, r1) { const f = (v) => r0 + ((v - d0) / (d1 - d0)) * (r1 - r0); f.inv = (p) => d0 + ((p - r0) / (r1 - r0)) * (d1 - d0); return f; }
+function niceStep(span, n) { const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; return (m >= 5 ? 10 : m >= 2 ? 5 : m >= 1 ? 2 : 1) * p; }
+function ticks(a, b, n) { const s = niceStep(b - a, n), out = []; for (let v = Math.ceil(a / s) * s; v <= b + s * 1e-9; v += s) out.push(+v.toPrecision(12)); return out; }
+function pathD(xs, ys) { let d = ""; for (let i = 0; i < xs.length; i++) d += (i ? "L" : "M") + xs[i].toFixed(1) + " " + ys[i].toFixed(1); return d; }
+const charts = {};
+function chart(id, height, draw) {
+  const box = $(id);
+  if (!charts[id] || !box.contains(charts[id].svg)) {  // new or rebuilt container: start fresh
+    const svg = el("svg", { role: "img" }); box.appendChild(svg);
+    const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; box.appendChild(tip);
+    charts[id] = { svg, tip, w: -1 };
+    if ("ResizeObserver" in window) new ResizeObserver(() => { const c = charts[id]; if (box.clientWidth !== c.w && c.draw) c.render(); }).observe(box);
+  }
+  const c = charts[id];
+  c.draw = draw;
+  c.render = () => {
+    const w = Math.max(260, Math.floor(box.clientWidth)); c.w = box.clientWidth;
+    const h = typeof height === "function" ? height(w) : height;
+    c.svg.setAttribute("viewBox", `0 0 ${w} ${h}`); c.svg.setAttribute("width", w); c.svg.setAttribute("height", h);
+    while (c.svg.firstChild) c.svg.removeChild(c.svg.firstChild);
+    c.tip.hidden = true;
+    draw(c.svg, w, h, c.tip);
+  };
+  if (box.offsetParent !== null) c.render(); else c.pending = true;
+}
+function hover(svg, tip, box, pick) {
+  const line = el("line", { y1: box.t, y2: box.b, stroke: "var(--ink)", "stroke-opacity": 0.3, visibility: "hidden" }, svg);
+  const hit = el("rect", { x: box.l, y: box.t, width: box.r - box.l, height: box.b - box.t, fill: "transparent" }, svg);
+  const move = (ev) => {
+    const r = svg.getBoundingClientRect(), W = svg.viewBox.baseVal.width;
+    const p = pick(((ev.clientX - r.left) / r.width) * W); if (!p) return;
+    line.setAttribute("x1", p.x); line.setAttribute("x2", p.x); line.setAttribute("visibility", "visible");
+    tip.innerHTML = p.html; tip.hidden = false;
+    const sx = (p.x / W) * r.width, tw = tip.offsetWidth;
+    tip.style.left = (sx + 12 + tw > r.width ? sx - 12 - tw : sx + 12) + "px"; tip.style.top = (box.t + 2) + "px";
+  };
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerdown", move);
+  hit.addEventListener("pointerleave", () => { line.setAttribute("visibility", "hidden"); tip.hidden = true; });
+}
+function axisY(svg, box, ys, vals, f) { vals.forEach((v) => { el("line", { x1: box.l, x2: box.r, y1: ys(v), y2: ys(v), stroke: "var(--rule)" }, svg); txt(svg, box.l - 6, ys(v) + 4, f(v), { "text-anchor": "end" }); }); }
+function axisX(svg, box, xs, vals, f) { vals.forEach((v) => { el("line", { x1: xs(v), x2: xs(v), y1: box.b, y2: box.b + 4, stroke: "var(--rule)" }, svg); txt(svg, xs(v), box.b + 16, f(v), { "text-anchor": "middle" }); }); }
+
+// ---------- shared result card ----------
+function lrCard(id, lr, hp, hd) {
+  const words = E.verbal(lr, `<b>the proposition that ${hp}</b>`, `<b>the proposition that ${hd}</b>`);
+  $(id).innerHTML = `
+    <span class="eyebrow">Likelihood ratio</span>
+    <div class="lr-top"><span class="lr-value num">${fmtLR(lr)}</span><span class="lr-sub">W = log₁₀ LR = ${isFinite(lr) && lr > 0 ? (E.bans(lr) >= 0 ? "+" : "") + E.bans(lr).toFixed(2) : "—"} bans</span></div>
+    <p class="lr-words">The findings provide ${words}.</p>
+    <div class="props"><span><b class="hp-c">Hp</b> ${hp}</span><span><b class="hd-c">Hd</b> ${hd}</span></div>
+    <div class="chart" id="${id}-scale"></div>`;
+  chart(`${id}-scale`, 58, (svg, w) => {
+    const box = { l: 8, r: w - 8, t: 16, b: 34 }, xs = lin(-4, 7, box.l, box.r);
+    [[-4, -3], [-3, -2], [-2, -1], [-1, -0.301], [-0.301, 0.301], [0.301, 1], [1, 2], [2, 3], [3, 4], [4, 6], [6, 7]]
+      .forEach(([a, b], i) => el("rect", { x: xs(a), y: box.t, width: xs(b) - xs(a), height: box.b - box.t, fill: i % 2 ? "var(--band-2)" : "var(--band)" }, svg));
+    const labs = w < 480 ? [-4, -2, 0, 2, 4, 6] : [-4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
+    labs.forEach((v) => txt(svg, xs(v), box.b + 14, v === 0 ? "1" : v > 0 ? "10" + sup(v) : "1/10" + sup(-v), { "text-anchor": "middle" }));
+    txt(svg, box.l, 11, "← supports Hd", {}); txt(svg, box.r, 11, "supports Hp →", { "text-anchor": "end" });
+    if (lr > 0 && isFinite(lr)) {
+      const x = xs(Math.max(-4, Math.min(7, Math.log10(lr))));
+      el("line", { x1: x, x2: x, y1: box.t - 3, y2: box.b + 3, stroke: "var(--ink)", "stroke-width": 3 }, svg);
+    }
+  });
+}
+function working(id, steps) { $(id).innerHTML = steps.map((s) => `<li>${s}</li>`).join(""); }
+function bindAll(formId, fn) {
+  const f = $(formId); let timer = null;
+  const run = () => { clearTimeout(timer); timer = setTimeout(fn, 60); };
+  f.addEventListener("input", run); f.addEventListener("change", run); f.addEventListener("submit", (e) => e.preventDefault());
+}
+function setVals(map) { for (const k in map) { const e = $(k); if (e.type === "checkbox") e.checked = !!map[k]; else e.value = map[k]; } }
+function presets(selectId, list, apply) {
+  const s = $(selectId);
+  s.innerHTML = list.map((p, i) => `<option value="${i}">${p.name}</option>`).join("");
+  s.addEventListener("change", () => apply(list[+s.value]));
+  apply(list[0]);
+}
+const current = {};  // latest result per module, for "Add to case"
+
+// ---------- measurement ----------
+let mMethod = "density";
+const M_PRESETS = [
+  { name: "Glass fragment, refractive index", what: "refractive index", x: 1.5226, delta: 0.0001, cm: 1.5224, cs: 0.0004, pm: 1.52, ps: 0.0015, method: "density", source: "Population: bottle glass, Lambert and Evett (1984), as quoted in Adam (2010). Questioned and control values are illustrative." },
+  { name: "Heroin purity (%)", what: "purity (%)", x: 31.0, delta: 0.5, cm: 30.6, cs: 0.6, pm: 58.7, ps: 14.8, method: "density", source: "Population: street seizures in south-western Sydney, Weatherburn and Lind (1997), as quoted in Adam (2010). Questioned and control values are illustrative." },
+  { name: "Hair diameter (µm), interval method", what: "hair diameter (µm)", x: 95, delta: 3, cm: 92, cs: 6, pm: 70, ps: 20, method: "interval", source: "Illustrative population of head-hair diameters." },
+  { name: "Hair declared indistinguishable", what: "hair diameter (µm)", x: 95, delta: 3, cm: 92, cs: 6, pm: 70, ps: 20, method: "interval", indist: true, source: "Illustrative. With P(E|Hp) = 1, the LR is just 1/(population probability of the window)." },
+];
+function setMethod(m) {
+  mMethod = m;
+  $("m-meth-d").setAttribute("aria-pressed", m === "density"); $("m-meth-i").setAttribute("aria-pressed", m === "interval");
+  $("m-delta-row").hidden = m !== "interval"; $("m-indist-row").hidden = m !== "interval";
+  if (m === "density") $("m-indist").checked = false;
+  measure();
+}
+$("m-meth-d").addEventListener("click", () => setMethod("density"));
+$("m-meth-i").addEventListener("click", () => setMethod("interval"));
+function measure() {
+  const what = $("m-what").value || "measurement", x = val("m-x"), d = val("m-delta"), cm = val("m-cm"), cs = val("m-cs"), pm = val("m-pm"), ps = val("m-ps");
+  const indist = mMethod === "interval" && $("m-indist").checked;
+  $("m-cm").disabled = indist; $("m-cs").disabled = indist;
+  const hp = "the questioned item came from the control source", hd = "it came from another source in the population";
+  if (![x, pm, ps].every(isFinite) || ps <= 0 || (!indist && (!(cs > 0) || !isFinite(cm))) || (mMethod === "interval" && !(d > 0))) {
+    $("r-measure").innerHTML = `<p class="muted">Enter positive standard deviations${mMethod === "interval" ? " and Δ" : ""} to see the result.</p>`; return;
+  }
+  let lr, steps;
+  if (mMethod === "density") {
+    const r = E.lrDensity(x, cm, cs, pm, ps); lr = r.lr;
+    steps = [
+      `How far x sits from the control: ${code(`z_s = (x − x̄)/s = (${fv(x)} − ${fv(cm)}) / ${fv(cs)} = ${r.zs.toFixed(4)}`)}.`,
+      `How unusual x is in the population: ${code(`z_σ = (x − μ)/σ = (${fv(x)} − ${fv(pm)}) / ${fv(ps)} = ${r.zp.toFixed(4)}`)}.`,
+      `Ratio of the two curve heights at x: ${code(`LR = (σ/s)·exp((z_σ² − z_s²)/2) = (${fv(ps)}/${fv(cs)})·exp((${r.zp.toFixed(4)}² − ${r.zs.toFixed(4)}²)/2) = ${fmt(lr)}`)}.`,
+      `A small s (tight control) and a large z_σ (rare in the population) both push the LR up. If x sits far from the control, z_s² dominates and the LR falls below 1.`,
+    ];
+  } else {
+    const r = E.lrInterval(x, d, pm, ps, indist ? null : cm, indist ? null : cs); lr = r.lr;
+    steps = [`Match window: ${code(`[x − Δ, x + Δ] = [${fv(r.lo)}, ${fv(r.hi)}]`)}.`,
+      indist ? `Declared indistinguishable from the control, so ${code("P(E|Hp) = 1")}.` : `Area of the control curve over the window: ${code(`P(E|Hp) = ${fmt(r.num)}`)}.`,
+      `Area of the population curve over the window: ${code(`P(E|Hd) = ${fmt(r.den)}`)}.`,
+      `${code(`LR = ${fmt(r.num)} / ${fmt(r.den)} = ${fmt(lr)}`)}. As Δ shrinks, both areas shrink but their ratio tends to the density result (Adam Table 11.6).`];
+  }
+  current.measure = { name: `${what[0].toUpperCase() + what.slice(1)} match`, lr };
+  lrCard("r-measure", lr, hp, hd); working("w-measure", steps);
+  chart("c-measure", (w) => (w < 480 ? 220 : 250), (svg, w, h, tip) => {
+    const box = { l: 10, r: w - 10, t: 12, b: h - 26 };
+    const sds = indist ? [] : [[cm, cs]];
+    let lo = Math.min(pm - 3.5 * ps, x), hi = Math.max(pm + 3.5 * ps, x);
+    sds.forEach(([m, s]) => { lo = Math.min(lo, m - 4 * s); hi = Math.max(hi, m + 4 * s); });
+    const xs = lin(lo, hi, box.l, box.r), N = 400, grid = E.linspace(lo, hi, N);
+    const fc = indist ? null : grid.map((g) => E.normPdf(g, cm, cs)), fp = grid.map((g) => E.normPdf(g, pm, ps));
+    const top = Math.max(...fp, ...(fc || [0])) * 1.08, ys = lin(0, top, box.b, box.t);
+    const X = grid.map(xs);
+    const area = (f, color) => { el("path", { d: pathD(X, f.map(ys)) + `L${X[N - 1]} ${box.b}L${X[0]} ${box.b}Z`, fill: color, "fill-opacity": 0.12 }, svg); el("path", { d: pathD(X, f.map(ys)), fill: "none", stroke: color, "stroke-width": 2 }, svg); };
+    area(fp, "var(--hd)"); if (fc) area(fc, "var(--hp)");
+    if (mMethod === "interval") el("rect", { x: xs(x - d), y: box.t, width: Math.max(1, xs(x + d) - xs(x - d)), height: box.b - box.t, fill: "var(--ink)", "fill-opacity": 0.08 }, svg);
+    el("line", { x1: xs(x), x2: xs(x), y1: box.t, y2: box.b, stroke: "var(--ink)", "stroke-dasharray": "4 3" }, svg);
+    el("line", { x1: box.l, x2: box.r, y1: box.b, y2: box.b, stroke: "var(--rule)" }, svg);
+    axisX(svg, box, xs, ticks(lo, hi, w < 480 ? 3 : 5), (v) => fv(v));
+    const dot = (f, color) => { const y = ys(f); el("circle", { cx: xs(x), cy: y, r: 4.5, fill: color, stroke: "var(--surface)", "stroke-width": 2 }, svg); };
+    dot(E.normPdf(x, pm, ps), "var(--hd)"); if (!indist) dot(E.normPdf(x, cm, cs), "var(--hp)");
+    hover(svg, tip, box, (px) => { const g = xs.inv(px); return { x: px, html: `${what}: <b>${fv(+g.toPrecision(6))}</b><br><span class="hp-c">control</span> ${indist ? "—" : fmt(E.normPdf(g, cm, cs))}<br><span class="hd-c">population</span> ${fmt(E.normPdf(g, pm, ps))}` }; });
+  });
+}
+presets("m-preset", M_PRESETS, (p) => { setVals({ "m-what": p.what, "m-x": p.x, "m-delta": p.delta, "m-cm": p.cm, "m-cs": p.cs, "m-pm": p.pm, "m-ps": p.ps, "m-indist": !!p.indist }); $("m-source").textContent = p.source; setMethod(p.method); });
+bindAll("f-measure", measure);
+
+// ---------- transfer ----------
+const T_PRESETS = [
+  { name: "Two glass fragments, type ignored", what: "glass fragments", n: "2", t0: 0, tn: 0.06, b0: 0.37, bn: 0.11, p: 1, pc: 1, note: "Transfer and background rates for glass are estimates from Evett (1986), as quoted in Adam (2010), Table 11.7." },
+  { name: "Two glass fragments of a 1-in-100 type", what: "glass fragments", n: "2", t0: 0, tn: 0.06, b0: 0.37, bn: 0.11, p: 0.01, pc: 1, note: "Same Evett (1986) rates. Now the matching type has a population frequency of 1%." },
+  { name: "A single blue polyester fibre", what: "fibres", n: "1", t0: 0.02, tn: 0.05, b0: 0.6, bn: 0.15, p: 0.005, pc: 1, note: "Illustrative rates. A struggle usually transfers many fibres, so finding just one says little." },
+  { name: "Many fibres after a struggle", what: "fibres", n: "many", t0: 0.02, tn: 0.85, b0: 0.6, bn: 0.05, p: 0.005, pc: 1, note: "Illustrative rates. Many matching fibres are rare by chance but expected after a struggle." },
+];
+function transfer() {
+  const t0 = val("tr-t0"), tn = val("tr-tn"), b0 = val("tr-b0"), bn = val("tr-bn"), p = val("tr-p"), pc = val("tr-pc");
+  const n = $("tr-n").value || "n", what = $("tr-what").value || "items";
+  const probs = [t0, tn, b0, bn, p, pc];
+  if (!probs.every((v) => isFinite(v) && v >= 0 && v <= 1) || bn * p === 0) { $("r-transfer").innerHTML = `<p class="muted">Every value must be a probability between 0 and 1, with bₙ and p above 0.</p>`; return; }
+  const r = E.lrTransfer(t0, tn, b0, bn, p, pc);
+  const hp = `the ${what} were transferred during the alleged contact`, hd = `the ${what} were already on the suspect by chance`;
+  current.transfer = { name: `${n} ${what} (transfer)`, lr: r.lr };
+  lrCard("r-transfer", r.lr, hp, hd);
+  working("w-transfer", [
+    `Under Hp the ${what} got there by transfer (n transferred, none there before) or by chance (none transferred, n there anyway): ${code(`P(E|Hp) = t₀·bₙ·p + tₙ·b₀·p꜀ = ${fv(t0)}·${fv(bn)}·${fv(p)} + ${fv(tn)}·${fv(b0)}·${fv(pc)} = ${fmt(r.num)}`)}.`,
+    `Under Hd only chance is possible: ${code(`P(E|Hd) = bₙ·p = ${fv(bn)}·${fv(p)} = ${fmt(r.den)}`)}.`,
+    `${code(`LR = t₀ + tₙ·b₀·p꜀/(bₙ·p) = ${fv(t0)} + ${fmt(r.transferTerm)} = ${fmt(r.lr)}`)}.`,
+    `The t₀ term is usually tiny. Almost all the weight comes from how much more often the observed number of ${what} arises from transfer than from everyday life.`]);
+  chart("c-transfer", 120, (svg, w, h, tip) => {
+    const box = { l: 74, r: w - 12, t: 10, b: h - 24 };
+    const viaT = tn * b0 * pc, viaC = t0 * bn * p, top = Math.max(r.num, r.den) * 1.05;
+    const xs = lin(0, top, box.l, box.r), bh = 26;
+    const bar = (y, a, b, color, op, label) => { el("rect", { x: xs(a), y, width: Math.max(0, xs(b) - xs(a)), height: bh, fill: color, "fill-opacity": op, rx: 2 }, svg); };
+    const y1 = box.t + 4, y2 = y1 + bh + 14;
+    txt(svg, box.l - 8, y1 + bh / 2 + 4, "P(E|Hp)", { "text-anchor": "end" }); txt(svg, box.l - 8, y2 + bh / 2 + 4, "P(E|Hd)", { "text-anchor": "end" });
+    bar(y1, 0, viaT, "var(--hp)", 1); bar(y1, viaT, viaT + viaC, "var(--hp)", 0.45); bar(y2, 0, r.den, "var(--hd)", 1);
+    axisX(svg, box, xs, ticks(0, top, w < 480 ? 3 : 5), (v) => fmt(v, 3));
+    hover(svg, tip, box, () => ({ x: xs(Math.max(r.num, r.den)), html: `P(E|Hp) = ${fmt(r.num)} (transfer ${fmt(viaT)}, chance ${fmt(viaC)})<br>P(E|Hd) = ${fmt(r.den)}` }));
+  });
+}
+presets("tr-preset", T_PRESETS, (p) => { setVals({ "tr-what": p.what, "tr-n": p.n, "tr-t0": p.t0, "tr-tn": p.tn, "tr-b0": p.b0, "tr-bn": p.bn, "tr-p": p.p, "tr-pc": p.pc }); transfer(); });
+bindAll("f-transfer", transfer);
+
+// ---------- DNA ----------
+const D_PRESETS = [
+  { name: "10-locus profile (invented frequencies)", theta: 0.01, pop: 5000000, loci: [["D3S1358", 0.25, 0.21], ["vWA", 0.17, 0.27], ["D16S539", 0.32, ""], ["D2S1338", 0.12, 0.08], ["D8S1179", 0.31, 0.19], ["D21S11", 0.24, 0.16], ["D18S51", 0.14, 0.09], ["D19S433", 0.38, ""], ["TH01", 0.19, 0.33], ["FGA", 0.13, 0.18]] },
+  { name: "Partial profile, 4 loci (invented frequencies)", theta: 0.01, pop: 5000000, loci: [["vWA", 0.12, 0.08], ["TH01", 0.21, ""], ["FGA", 0.05, 0.17], ["D21S11", 0.09, 0.11]] },
+  { name: "Two homozygous loci, p = 0.3 and 0.1 (Adam §8.6)", theta: 0.01, pop: 100000, loci: [["A", 0.3, ""], ["B", 0.1, ""]] },
+];
+let dRows = [];
+function dnaRowsRender() {
+  $("d-rows").innerHTML = dRows.map((r, i) => `<tr><td><input type="text" data-i="${i}" data-k="0" value="${r[0]}" aria-label="Locus name"></td>
+    <td><input type="number" step="any" min="0" max="1" data-i="${i}" data-k="1" value="${r[1]}" aria-label="Allele 1 frequency"></td>
+    <td><input type="number" step="any" min="0" max="1" data-i="${i}" data-k="2" value="${r[2]}" aria-label="Allele 2 frequency"></td>
+    <td><button type="button" class="icon-btn" data-del="${i}" aria-label="Remove locus">×</button></td></tr>`).join("");
+}
+$("d-rows").addEventListener("input", (e) => { const t = e.target; if (t.dataset.i != null) dRows[+t.dataset.i][+t.dataset.k] = t.value; });
+$("d-rows").addEventListener("click", (e) => { const b = e.target.closest("[data-del]"); if (b) { dRows.splice(+b.dataset.del, 1); dnaRowsRender(); dna(); } });
+$("d-addrow").addEventListener("click", () => { dRows.push([`Locus ${dRows.length + 1}`, 0.1, 0.2]); dnaRowsRender(); dna(); });
+function dna() {
+  const theta = val("d-theta"), pop = Math.round(val("d-pop"));
+  $("d-theta-v").textContent = theta.toFixed(3);
+  const loci = [], names = [];
+  for (const r of dRows) {
+    const p = parseNum(r[1]), q = parseNum(r[2]);
+    if (!(p > 0 && p <= 1) || (String(r[2]).trim() !== "" && !(q > 0 && q <= 1))) { $("r-dna").innerHTML = `<p class="muted">Allele frequencies must be between 0 and 1. Check ${r[0] || "a locus"}.</p>`; return; }
+    loci.push(String(r[2]).trim() === "" ? [p] : [p, q]); names.push(r[0] || `Locus ${loci.length}`);
+  }
+  if (!loci.length) { $("r-dna").innerHTML = `<p class="muted">Add at least one locus.</p>`; return; }
+  const r = E.lrDna(loci, theta, pop > 1 ? pop : null);
+  const hp = "the suspect is the source of the crime-scene DNA", hd = "an unrelated person from the population is the source";
+  current.dna = { name: `DNA profile (${loci.length} loci)`, lr: r.lr };
+  lrCard("r-dna", r.lr, hp, hd);
+  $("s-dna").innerHTML = [[`1 in ${oneIn(r.match)}`, "profile frequency"], [pop > 1 ? fmt(r.expected, 3) : "—", `other matching people expected among ${pop > 1 ? pop.toLocaleString("en-US") : "N"}`], [pop > 1 ? (100 * r.pSource).toPrecision(3) + "%" : "—", "P(suspect is the source | match) if everyone was equally likely beforehand"]]
+    .map(([v, l]) => `<div class="stat"><span class="v num">${v}</span><span class="l">${l}</span></div>`).join("");
+  $("n-dna").textContent = pop > 1 ? `A profile frequency of 1 in ${oneIn(r.match)} is the chance that a random unrelated person matches. It is not the chance that the suspect is innocent. In a population of ${pop.toLocaleString("en-US")}, about ${fmt(r.expected, 3)} other people would be expected to match, so the match alone leaves P(source) at ${(100 * r.pSource).toPrecision(3)}%. Other evidence has to narrow the field.` : "";
+  working("w-dna", names.map((n, i) => {
+    const l = loci[i], hw = l.length === 1 ? l[0] * l[0] : 2 * l[0] * l[1];
+    return `${n}: ${l.length === 1 ? `homozygote, ${code(`p² = ${fv(l[0])}² = ${fmt(hw)}`)}` : `heterozygote, ${code(`2pq = 2·${fv(l[0])}·${fv(l[1])} = ${fmt(hw)}`)}`}; with θ = ${theta}: ${code(fmt(r.freqs[i]))}.`;
+  }).concat([`Profile frequency = product over loci = ${code(fmt(r.match))}. ${code(`LR = 1/${fmt(r.match)} = ${fmtLR(r.lr)}`)}.`,
+    `θ > 0 raises every genotype frequency a little (relatives within a subpopulation share alleles), which lowers the LR. That is the conservative direction.`]));
+  chart("c-dna", (w) => 34 + 22 * loci.length, (svg, w, h, tip) => {
+    const box = { l: 86, r: w - 56, t: 6, b: h - 22 };
+    const b = r.freqs.map((f) => -Math.log10(f)), max = Math.max(...b) * 1.1;
+    const xs = lin(0, max, box.l, box.r), bh = 14;
+    b.forEach((v, i) => {
+      const y = box.t + i * 22;
+      txt(svg, box.l - 8, y + bh - 2, names[i], { "text-anchor": "end" });
+      el("rect", { x: box.l, y, width: Math.max(1, xs(v) - box.l), height: bh, fill: "var(--hp)", rx: 2 }, svg);
+      txt(svg, xs(v) + 6, y + bh - 2, v.toFixed(2), {});
+    });
+    axisX(svg, box, xs, ticks(0, max, 4), (v) => String(v));
+    txt(svg, box.r + 50, box.b + 16, `total ${b.reduce((a, c) => a + c, 0).toFixed(2)} bans`, { "text-anchor": "end" });
+  });
+}
+presets("d-preset", D_PRESETS, (p) => { dRows = p.loci.map((l) => l.slice()); setVals({ "d-theta": p.theta, "d-pop": p.pop }); dnaRowsRender(); dna(); });
+bindAll("f-dna", dna);
+
+// ---------- cooling ----------
+let coModel = "rectal";
+const C_PRESETS = [
+  { name: "Rectal 31.0 °C in a 12 °C room", model: "rectal", T: 31.0, Tsd: 0.3, TE: 12, TEsd: 1.5, M: 75, Msd: 5, Z: 0.1, Zsd: 0.02 },
+  { name: "Rectal 36.5 °C: still on the plateau", model: "rectal", T: 36.5, Tsd: 0.3, TE: 18, TEsd: 1, M: 80, Msd: 5, Z: 0.1, Zsd: 0.02 },
+  { name: "Rectal 22 °C in a cold cellar, long after death", model: "rectal", T: 22, Tsd: 0.3, TE: 6, TEsd: 1, M: 70, Msd: 5, Z: 0.1, Zsd: 0.02 },
+  { name: "Forehead skin 22 °C at 10 °C", model: "forehead", T: 22, Tsd: 0.5, TE: 10, TEsd: 1, M: 70, Msd: 5, Z: 0.1, Zsd: 0.02 },
+];
+function setModel(m) {
+  coModel = m;
+  $("co-rectal").setAttribute("aria-pressed", m === "rectal"); $("co-forehead").setAttribute("aria-pressed", m === "forehead");
+  $("co-mass-row").hidden = m !== "rectal"; $("co-z-row").hidden = m !== "forehead";
+  $("co-model-hint").textContent = m === "rectal"
+    ? "T(t) = T_E + (37.2 − T_E)[p/(p−Z)e^(−Zt) − Z/(p−Z)e^(−pt)], Z = 1.2815·M^(−0.625) − 0.0284, p = 10Z."
+    : "T(t) = T_E + (33 − T_E)e^(−Zt): Newton's law of cooling for exposed skin.";
+  cool();
+}
+$("co-rectal").addEventListener("click", () => setModel("rectal"));
+$("co-forehead").addEventListener("click", () => setModel("forehead"));
+function cool() {
+  const T = val("co-T"), Tsd = val("co-Tsd"), TE = val("co-TE"), TEsd = val("co-TEsd"), M = val("co-M"), Msd = val("co-Msd"), Z = val("co-Z"), Zsd = val("co-Zsd");
+  const T0 = coModel === "rectal" ? E.constants.RECTAL_T0 : E.constants.FOREHEAD_T0;
+  if (![T, Tsd, TE, TEsd, M, Msd, Z, Zsd].every(isFinite) || Tsd <= 0) { $("s-cooling").innerHTML = `<p class="muted">Fill in every value. The temperature uncertainty must be above 0.</p>`; return; }
+  if (T <= TE || T >= T0) { $("s-cooling").innerHTML = `<p class="muted">The body temperature must lie between the surroundings (${TE} °C) and the starting temperature (${T0} °C).</p>`; return; }
+  const tHat = coModel === "rectal" ? E.timeDouble(T, TE, M) : E.timeSingle(T, TE, T0, Z);
+  const slope = coModel === "rectal" ? E.dtempDouble(tHat, TE, M) : E.dtempSingle(tHat, TE, T0, Z);
+  const mc = E.monteCarlo({ model: coModel, T, Tsd, TE, TEsd, M, Msd, Z, Zsd, n: 20000, seed: 7 });
+  const hpd = 1 / Math.abs(slope);
+  $("s-cooling").innerHTML = [[isFinite(tHat) ? tHat.toFixed(1) + " h" : "—", "best estimate"], [`${mc.p2_5.toFixed(1)}–${mc.p97_5.toFixed(1)} h`, "95% range, all uncertainties"],
+    [isFinite(hpd) ? hpd.toFixed(2) + " h/°C" : "∞", "stretch factor |dt/dT| at the estimate"]]
+    .map(([v, l]) => `<div class="stat"><span class="v num">${v}</span><span class="l">${l}</span></div>`).join("");
+  $("n-cooling").textContent = `The stretch factor says how many hours one degree of temperature is worth at this point on the curve. Here it is ${hpd.toFixed(2)} h/°C, so a ±${Tsd} °C thermometer error alone spreads the estimate by about ±${(Tsd * hpd).toFixed(1)} h. ` +
+    (coModel === "rectal" ? "Near death the rectal curve is flat (the post-mortem plateau), so the stretch factor blows up and temperature says little about the first few hours. " : "") +
+    "Mathematically it is the Jacobian of the change of variables from temperature to time. In supersymmetric quantum mechanics the same kind of factor appears as the fermion determinant.";
+  const tmax = Math.max(12, Math.min(E.constants.T_MAX, (mc.p97_5 || tHat) * 1.35));
+  const grid = E.linspace(0, tmax, 300);
+  const curve = grid.map((t) => (coModel === "rectal" ? E.tempDouble(t, TE, M) : E.tempSingle(t, TE, T0, Z)));
+  chart("c-cooling", (w) => (w < 480 ? 210 : 240), (svg, w, h, tip) => {
+    const box = { l: 40, r: w - 10, t: 10, b: h - 24 };
+    const xs = lin(0, tmax, box.l, box.r), ys = lin(Math.min(TE, ...curve) - 1, T0 + 1, box.b, box.t);
+    axisY(svg, box, ys, ticks(Math.min(TE, ...curve) - 1, T0 + 1, 5), (v) => v + "°");
+    axisX(svg, box, xs, ticks(0, tmax, w < 480 ? 4 : 6), (v) => v + " h");
+    el("rect", { x: box.l, y: ys(T + 2 * Tsd), width: box.r - box.l, height: ys(T - 2 * Tsd) - ys(T + 2 * Tsd), fill: "var(--hp)", "fill-opacity": 0.16 }, svg);
+    el("rect", { x: xs(mc.p2_5), y: box.t, width: Math.max(1, xs(mc.p97_5) - xs(mc.p2_5)), height: box.b - box.t, fill: "var(--hp)", "fill-opacity": 0.12 }, svg);
+    el("path", { d: pathD(grid.map(xs), curve.map(ys)), fill: "none", stroke: "var(--ink)", "stroke-width": 2 }, svg);
+    if (isFinite(tHat)) el("circle", { cx: xs(tHat), cy: ys(T), r: 4.5, fill: "var(--hp)", stroke: "var(--surface)", "stroke-width": 2 }, svg);
+    hover(svg, tip, box, (px) => { const t = Math.max(0, Math.min(tmax, xs.inv(px))); const Tt = coModel === "rectal" ? E.tempDouble(t, TE, M) : E.tempSingle(t, TE, T0, Z); return { x: xs(t), html: `${t.toFixed(1)} h: <b>${Tt.toFixed(2)} °C</b>` }; });
+  });
+  chart("c-cooling-d", (w) => (w < 480 ? 150 : 170), (svg, w, h, tip) => {
+    const box = { l: 40, r: w - 10, t: 8, b: h - 24 }, bins = 80, bw = tmax / bins, counts = new Array(bins).fill(0);
+    mc.samples.forEach((t) => { const i = Math.floor(t / bw); if (i >= 0 && i < bins) counts[i]++; });
+    const hist = counts.map((c) => c / (mc.samples.length * bw));
+    const jd = E.jacobianDensity(coModel, grid, T, Tsd, TE, M, Z);
+    const xs = lin(0, tmax, box.l, box.r), ys = lin(0, Math.max(...hist, ...jd) * 1.08, box.b, box.t);
+    hist.forEach((v, i) => el("rect", { x: xs(i * bw) + 0.5, y: ys(v), width: Math.max(0.5, xs(bw) - xs(0) - 1), height: box.b - ys(v), fill: "var(--hp)", "fill-opacity": 0.45 }, svg));
+    el("path", { d: pathD(grid.map(xs), jd.map(ys)), fill: "none", stroke: "var(--hd)", "stroke-width": 2 }, svg);
+    el("line", { x1: box.l, x2: box.r, y1: box.b, y2: box.b, stroke: "var(--rule)" }, svg);
+    axisX(svg, box, xs, ticks(0, tmax, w < 480 ? 4 : 6), (v) => v + " h");
+    txt(svg, box.l - 6, box.t + 10, "density", { "text-anchor": "end" });
+    hover(svg, tip, box, (px) => { const t = Math.max(0, Math.min(tmax, xs.inv(px))), i = Math.min(bins - 1, Math.floor(t / bw)); return { x: xs(t), html: `${t.toFixed(1)} h<br>all uncertainties ${hist[i].toFixed(3)}/h` }; });
+  });
+}
+presets("co-preset", C_PRESETS, (p) => { setVals({ "co-T": p.T, "co-Tsd": p.Tsd, "co-TE": p.TE, "co-TEsd": p.TEsd, "co-M": p.M, "co-Msd": p.Msd, "co-Z": p.Z, "co-Zsd": p.Zsd }); setModel(p.model); });
+bindAll("f-cooling", cool);
+
+// ---------- explanations ----------
+const X_PRESETS = [
+  { name: "Two infant deaths: Hill (2004) figures", an: "double murder", a1: "1/21700", a2: "176/21700", bn: "double SIDS", b1: "1/1300", b2: "5.7/1300" },
+  { name: "Two infant deaths: Dawid (2002) figures", an: "double murder", a1: "7/642093", a2: "7/642093", bn: "double SIDS", b1: "1/8543", b2: "1/8543" },
+];
+function explain() {
+  const a1 = val("x-a1"), a2 = val("x-a2"), b1 = val("x-b1"), b2 = val("x-b2"), an = $("x-an").value || "A", bn = $("x-bn").value || "B";
+  if (![a1, a2, b1, b2].every((v) => v > 0 && v <= 1)) { $("s-explain").innerHTML = `<p class="muted">Each probability must be between 0 and 1.</p>`; return; }
+  const r = E.compare(a1, a2, b1, b2, false), ri = E.compare(a1, a2, b1, b2, true);
+  $("s-explain").innerHTML = [[`${fmt(r.odds, 3)} : 1`, `odds of ${an} over ${bn}`], [(100 * r.prob).toPrecision(3) + "%", `P(${an}), if these are the only two explanations`],
+    [`${fmt(ri.odds, 3)} : 1`, "the same odds if the second event were treated as independent"]]
+    .map(([v, l]) => `<div class="stat"><span class="v num">${v}</span><span class="l">${l}</span></div>`).join("");
+  working("w-explain", [
+    `${code(`P(both | ${an}) = P(first)·P(second | first) = ${fmt(a1)}·${fmt(a2)} = ${fmt(r.pa)}`)}, about 1 in ${oneIn(r.pa)}.`,
+    `${code(`P(both | ${bn}) = ${fmt(b1)}·${fmt(b2)} = ${fmt(r.pb)}`)}, about 1 in ${oneIn(r.pb)}.`,
+    `Both explanations account for the deaths, so the evidence of the deaths has LR = 1 and ${code(`odds = ${fmt(r.pa)}/${fmt(r.pb)} = ${fmt(r.odds)}`)}.`,
+    `Squaring P(first) instead assumes the second event ignores the first. For ${bn} that gives 1 in ${oneIn(ri.pb)}. Shared genes and environment make a second event more likely, so the square badly overstates how rare the pair is.`]);
+  chart("c-explain", 150, (svg, w, h, tip) => {
+    const box = { l: 10, r: w - 10, t: 6, b: h - 24 };
+    const vals = [[r.pa, "var(--hp)", 1, an], [ri.pa, "var(--faint)", 0.5, an + " (independent)"], [r.pb, "var(--hd)", 1, bn], [ri.pb, "var(--faint)", 0.5, bn + " (independent)"]];
+    const lo = Math.floor(Math.min(...vals.map((v) => Math.log10(v[0])))), xs = lin(lo, 0, box.l, box.r), bh = 18;
+    vals.forEach(([p, color, op, name], i) => {
+      const y = box.t + i * 24;
+      el("rect", { x: box.l, y, width: Math.max(1, xs(Math.log10(p)) - box.l), height: bh, fill: color, "fill-opacity": op, rx: 2 }, svg);
+      txt(svg, box.l + 6, y + bh - 5, `${name}: 1 in ${oneIn(p)}`, {}).style.fill = "var(--ink)";
+    });
+    axisX(svg, box, xs, ticks(lo, 0, 6).filter((v) => Number.isInteger(v)), (v) => (v === 0 ? "1" : "10" + sup(v)));
+  });
+}
+presets("x-preset", X_PRESETS, (p) => { setVals({ "x-an": p.an, "x-a1": p.a1, "x-a2": p.a2, "x-bn": p.bn, "x-b1": p.b1, "x-b2": p.b2 }); explain(); });
+bindAll("f-explain", explain);
+
+// ---------- case ----------
+let caseItems = [
+  { name: "Glass refractive index match", lr: 14.86, example: true },
+  { name: "2 glass fragments (transfer, type ignored)", lr: 0.2018, example: true },
+  { name: "Partial DNA profile (4 loci)", lr: 1.808e6, example: true },
+];
+$("k-pop").value = 50000;
+function caseRender() {
+  const N = Math.round(val("k-pop"));
+  $("k-rows").innerHTML = caseItems.map((it, i) => `<tr><td>${it.name}${it.example ? '<span class="tag">example</span>' : ""}</td><td class="n">${fmtLR(it.lr)}</td><td class="n">${(E.bans(it.lr) >= 0 ? "+" : "") + E.bans(it.lr).toFixed(2)}</td><td><button type="button" class="icon-btn" data-k="${i}" aria-label="Remove ${it.name}">×</button></td></tr>`).join("")
+    || `<tr><td colspan="4" class="muted">No items yet. Use “Add to case” in another module, or add a likelihood ratio by hand.</td></tr>`;
+  const prior = N > 1 ? 1 / (N - 1) : null, c = E.combine(caseItems.map((i) => i.lr), prior);
+  $("s-case").innerHTML = [[fmtLR(c.lr), "combined LR"], [(c.bans >= 0 ? "+" : "") + c.bans.toFixed(2) + " bans", "total weight of evidence"],
+    [prior ? (100 * c.posteriorProb).toPrecision(3) + "%" : "—", `P(Hp | evidence), starting from 1 in ${N > 1 ? N.toLocaleString("en-US") : "N"}`]]
+    .map(([v, l]) => `<div class="stat"><span class="v num">${v}</span><span class="l">${l}</span></div>`).join("");
+  chart("c-case", (w) => 70 + 26 * caseItems.length, (svg, w, h, tip) => {
+    if (!prior) return;
+    const box = { l: 150, r: w - 14, t: 8, b: h - 24 };
+    const steps = [["Prior", Math.log10(prior), null]]; let acc = Math.log10(prior);
+    caseItems.forEach((it) => { const b = E.bans(it.lr); steps.push([it.name, acc, acc + b]); acc += b; });
+    steps.push(["Posterior", acc, null]);
+    const all = steps.flatMap((s) => [s[1], s[2] ?? s[1]]).concat([0]);
+    const lo = Math.floor(Math.min(...all)) - 0.5, hi = Math.ceil(Math.max(...all)) + 0.5, xs = lin(lo, hi, box.l, box.r);
+    ticks(lo, hi, 6).forEach((v) => { el("line", { x1: xs(v), x2: xs(v), y1: box.t, y2: box.b, stroke: "var(--rule)" }, svg); txt(svg, xs(v), box.b + 16, (v > 0 ? "+" : "") + v, { "text-anchor": "middle" }); });
+    el("line", { x1: xs(0), x2: xs(0), y1: box.t, y2: box.b, stroke: "var(--ink)", "stroke-opacity": 0.5, "stroke-dasharray": "3 3" }, svg);
+    txt(svg, xs(0) + 4, box.t + 10, "even odds", {});
+    const rowH = (box.b - box.t) / steps.length;
+    steps.forEach(([name, a, b], i) => {
+      const y = box.t + i * rowH + rowH * 0.2, hh = rowH * 0.6;
+      const short = name.length > 24 ? name.slice(0, 23) + "…" : name;
+      txt(svg, box.l - 8, y + hh / 2 + 4, short, { "text-anchor": "end" });
+      if (b == null) el("circle", { cx: xs(a), cy: y + hh / 2, r: 5, fill: "var(--ink)" }, svg);
+      else el("rect", { x: Math.min(xs(a), xs(b)), y, width: Math.max(1, Math.abs(xs(b) - xs(a))), height: hh, fill: b >= a ? "var(--hp)" : "var(--hd)", rx: 2 }, svg);
+    });
+  });
+}
+$("k-rows").addEventListener("click", (e) => { const b = e.target.closest("[data-k]"); if (b) { caseItems.splice(+b.dataset.k, 1); caseRender(); } });
+$("k-add").addEventListener("click", () => {
+  const lr = parseNum($("k-lr").value), name = $("k-name").value.trim() || "Reported likelihood ratio";
+  if (!(lr > 0)) { $("t-case").textContent = "Enter a likelihood ratio above 0, e.g. 50 or 1/4."; return; }
+  caseItems.push({ name, lr }); $("k-name").value = ""; $("k-lr").value = ""; $("t-case").textContent = `Added “${name}”.`; caseRender();
+});
+bindAll("f-case", caseRender);
+document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click", () => {
+  const k = b.dataset.add, it = current[k];
+  if (!it || !(it.lr > 0)) return;
+  caseItems = caseItems.filter((x) => !x.example);
+  caseItems.push({ name: it.name, lr: it.lr });
+  $("t-" + k).innerHTML = `Added to the case (${caseItems.length} item${caseItems.length > 1 ? "s" : ""}). <a href="#case">Open case summary</a>`;
+  caseRender();
+}));
+caseRender();
+
+// ---------- navigation ----------
+const MODS = [["measure", "Measurement match", "§11.6"], ["transfer", "Transfer evidence", "§11.7"], ["dna", "DNA profile", "§8.4"],
+  ["cooling", "Time since death", "§3.5"], ["explain", "Competing explanations", "§11.8"], ["case", "Case summary", "Bayes"]];
+$("nav").innerHTML = MODS.map(([k, n, s]) => `<button type="button" role="tab" id="tab-${k}" aria-controls="mod-${k}" data-mod="${k}">${n}<span class="mono">${s}</span></button>`).join("");
+function show(k) {
+  if (!MODS.some((m) => m[0] === k)) k = "measure";
+  MODS.forEach(([m]) => { $("mod-" + m).hidden = m !== k; $("tab-" + m).setAttribute("aria-selected", m === k); });
+  Object.keys(charts).forEach((id) => { const c = charts[id]; if ($(id).offsetParent !== null) c.render(); });
+}
+$("nav").addEventListener("click", (e) => { const b = e.target.closest("[data-mod]"); if (b) { location.hash = b.dataset.mod; show(b.dataset.mod); } });
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+show(location.hash.slice(1));
+})();
+</script>
+
+<script type="module" src="../together.js"></script>
+</body>
+</html>

@@ -37,7 +37,7 @@ const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
 
 // Chaos
-const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug"];
+const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug", "evidence"];
 const STICKERS = [
   "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
   "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
