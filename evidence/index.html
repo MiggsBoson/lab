@@ -141,6 +141,30 @@ table.case th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0
 table.case td.n { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
 .tag { font-family: var(--font-mono); font-size: 0.72rem; border: 1px solid var(--rule); border-radius: 3px; padding: 0 5px; color: var(--muted); margin-left: 6px; }
 footer { border-top: 1px solid var(--rule); padding-top: 14px; font-size: 0.82rem; color: var(--faint); display: grid; gap: 6px; }
+
+/* Worked example */
+.casefile { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 860px) { .casefile { grid-template-columns: 1fr; } }
+.story { display: grid; gap: 10px; max-width: 70ch; }
+.exhibits { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.exhibits li { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: baseline; font-size: 0.92rem; }
+.exhibit-tag { font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; border: 1px solid var(--ink); border-radius: 3px; padding: 1px 6px; white-space: nowrap; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; counter-reset: step; }
+.steps button { font: inherit; width: 100%; text-align: left; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; padding: 8px 10px; display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: baseline; }
+.steps button:hover { border-color: var(--ink); }
+.steps .k { font-family: var(--font-mono); color: var(--muted); font-size: 0.82rem; }
+.steps .m { display: block; font-size: 0.8rem; color: var(--muted); }
+.coach { border: 1px solid var(--rule); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 16px; display: grid; gap: 10px; }
+.coach-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; align-items: baseline; }
+.coach-head h2 { font-size: 1.25rem; }
+.coach p, .coach li { max-width: 78ch; }
+.coach ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; font-size: 0.93rem; }
+.coach .q { font-weight: 600; }
+.coach .answer { border-top: 1px dashed var(--rule); padding-top: 8px; }
+.coach .try { font-size: 0.93rem; color: var(--muted); }
+.coach .try b { color: var(--ink); }
+.coach-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.coach-nav .spacer { flex: 1; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -152,6 +176,52 @@ footer { border-top: 1px solid var(--rule); padding-top: 14px; font-size: 0.82re
   </header>
 
   <nav class="modules" role="tablist" aria-label="Evidence types" id="nav"></nav>
+
+  <aside class="coach" id="coach" aria-live="polite" hidden>
+    <div class="coach-head"><h2 id="coach-title"></h2><span class="eyebrow" id="coach-count"></span></div>
+    <div id="coach-intro"></div>
+    <div><h3>What to look at</h3><ul id="coach-look"></ul></div>
+    <p class="q" id="coach-q"></p>
+    <div class="coach-nav"><button type="button" class="btn ghost" id="coach-show">Show the answer</button></div>
+    <div class="answer" id="coach-a" hidden></div>
+    <p class="try" id="coach-try"></p>
+    <div class="coach-nav">
+      <button type="button" class="btn ghost" id="coach-back">← Back</button>
+      <button type="button" class="btn" id="coach-next">Next step →</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="coach-exit">Leave the walkthrough</button>
+    </div>
+  </aside>
+
+  <!-- Worked example -->
+  <section class="module" id="mod-guide" role="tabpanel" hidden>
+    <div class="mod-head">
+      <span class="eyebrow">Worked example · invented case</span>
+      <h2>The jeweller's back window</h2>
+      <p class="muted">Learn the tool by working one case through every module. Each step fills in the inputs for you, says what to look at, asks a question, and suggests something to change. Takes about 15 minutes.</p>
+    </div>
+    <div class="casefile">
+      <div class="panel story">
+        <h3>The case</h3>
+        <p>At 08:00 on a Saturday a jeweller is found dead in his shop. The back window has been smashed from outside. Nothing was taken from the safe.</p>
+        <p>A man is questioned two days later. He says he came to the shop at 21:00 on Friday to sell a ring, that the jeweller was alive when he left by the front door at 21:30, and that he never went near the back of the building. Two glass fragments are found on his jacket. Blood on the broken window frame gives a partial DNA profile that matches him.</p>
+        <p>Your job is the forensic scientist's: weigh each item of evidence on its own terms, then see what they say together. The court decides guilt. You report how strongly the findings support one proposition over another.</p>
+        <div class="actions"><button type="button" class="btn" id="guide-start">Start the walkthrough</button></div>
+        <p class="small muted">All people, places and measurements are invented. Transfer rates for glass are Evett's (1986) published estimates; the DNA allele frequencies are made up for practice.</p>
+      </div>
+      <div class="panel">
+        <h3>Exhibits</h3>
+        <ul class="exhibits">
+          <li><span class="exhibit-tag">T1</span><span>Rectal temperature 31.0 °C at 08:00; shop about 12 °C overnight; body about 75 kg.</span></li>
+          <li><span class="exhibit-tag">G1</span><span>Two glass fragments from the suspect's jacket, refractive index 1.5226.</span></li>
+          <li><span class="exhibit-tag">G2</span><span>Control glass from the broken back window, refractive index 1.5224 ± 0.0004.</span></li>
+          <li><span class="exhibit-tag">D1</span><span>Blood on the window frame: partial DNA profile at 4 loci, matching the suspect.</span></li>
+        </ul>
+        <h3>Steps</h3>
+        <ol class="steps" id="guide-steps"></ol>
+      </div>
+    </div>
+  </section>
 
   <!-- Measurement match -->
   <section class="module" id="mod-measure" role="tabpanel" hidden>
@@ -978,12 +1048,105 @@ document.querySelectorAll("[data-add]").forEach((b) => b.addEventListener("click
 }));
 caseRender();
 
+// ---------- worked example ----------
+// One invented case through every module. Answers are computed by the engine from the
+// case's own numbers, so they always agree with what the modules show.
+const CASE = {
+  found: 8 * 60, cool: { T: 31.0, Tsd: 0.3, TE: 12, TEsd: 1.5, M: 75, Msd: 5 },
+  glass: { x: 1.5226, cm: 1.5224, cs: 0.0004, pm: 1.518, ps: 0.003 },
+  transfer: { t0: 0, tn: 0.06, b0: 0.37, bn: 0.11, p: 1, pc: 1 },
+  loci: [["vWA", 0.12, 0.08], ["TH01", 0.21, ""], ["FGA", 0.05, 0.17], ["D21S11", 0.09, 0.11]], theta: 0.01, pop: 60000,
+};
+const clock = (mins) => { const m = ((Math.round(mins) % 1440) + 1440) % 1440; return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+const caseLR = () => {
+  const g = CASE.glass, t = CASE.transfer;
+  const loci = CASE.loci.map((l) => (String(l[2]) === "" ? [l[1]] : [l[1], l[2]]));
+  return { ri: E.lrDensity(g.x, g.cm, g.cs, g.pm, g.ps).lr, tr: E.lrTransfer(t.t0, t.tn, t.b0, t.bn, t.p, t.pc).lr,
+    dna: E.lrDna(loci, CASE.theta, CASE.pop), dna0: E.lrDna(loci, 0, CASE.pop) };
+};
+const STEPS = [
+  { mod: "cooling", title: "When did the jeweller die?",
+    load() { const c = CASE.cool; setVals({ "co-T": c.T, "co-Tsd": c.Tsd, "co-TE": c.TE, "co-TEsd": c.TEsd, "co-M": c.M, "co-Msd": c.Msd, "co-Z": 0.1, "co-Zsd": 0.02 }); $("co-preset").selectedIndex = -1; setModel("rectal"); },
+    intro: `<p>Exhibit T1 is entered: rectal temperature <b>31.0 ± 0.3 °C</b> at 08:00, a shop at about <b>12 ± 1.5 °C</b> overnight (the heating log is vague), and a body of about <b>75 ± 5 kg</b>. The suspect says the jeweller was alive at 21:30.</p>`,
+    look: ["The best estimate and the 95% range in the tiles.", "The cooling curve: the blue horizontal band is the measured temperature, the blue vertical band is the time range it maps to.", "The lower chart: the orange curve uses only the thermometer's error, the blue bars use every uncertainty."],
+    q: "Is the time of death consistent with the jeweller being alive at 21:30?",
+    a() { const c = CASE.cool, t = E.timeDouble(c.T, c.TE, c.M), mc = E.monteCarlo({ model: "rectal", ...c, n: 20000, seed: 7 });
+      return `<p><b>Yes.</b> The best estimate is ${t.toFixed(1)} h before 08:00, about <b>${clock(CASE.found - 60 * t)}</b>, and the 95% range runs from about ${clock(CASE.found - 60 * mc.p97_5)} to ${clock(CASE.found - 60 * mc.p2_5)}. 21:30 would be 10.5 h before discovery, well outside the range. So this evidence fits the suspect's account. It tells us <i>when</i>, not <i>who</i>.</p>`; },
+    tryit: "<b>Try this:</b> set the surroundings' ± to 0 and watch the range shrink. The room temperature, not the thermometer, limits this estimate. Then try a body temperature of 36.5 °C: on the plateau near death, one degree is worth many hours." },
+  { mod: "measure", title: "Does the glass on the jacket match the window?",
+    load() { const g = CASE.glass; setVals({ "m-what": "refractive index", "m-x": g.x, "m-delta": 0.0001, "m-cm": g.cm, "m-cs": g.cs, "m-pm": g.pm, "m-ps": g.ps, "m-indist": false }); $("m-preset").selectedIndex = -1; $("m-source").textContent = "Worked example: an invented survey of window glass."; setMethod("density"); },
+    intro: `<p>Exhibits G1 and G2 are entered. The fragments' refractive index is <b>1.5226</b>. The broken window gives a control mean of <b>1.5224</b> with standard deviation <b>0.0004</b>. For the population, an invented survey of window glass: mean <b>1.5180</b>, standard deviation <b>0.0030</b>.</p>`,
+    look: ["The two curves: blue for the broken window, orange for window glass in general.", "The dashed line is the fragments' value. The LR is the ratio of the two dots' heights on it.", "In the working: z_s says how close the fragments are to the window; z_σ says how unusual they are in the population."],
+    q: "The match is excellent, only half a standard deviation from the window. Why is the likelihood ratio only about 20?",
+    a() { const r = caseLR().ri, z = (CASE.glass.x - CASE.glass.pm) / CASE.glass.ps;
+      return `<p>LR = <b>${fmtLR(r)}</b>, ${E.verbal(r, "the fragments coming from this window", "another source")}. The fragments match the window well, but a refractive index of 1.5226 is not rare in window glass (z_σ = ${z.toFixed(2)}), so many other windows would match too. <b>Rarity matters as much as closeness.</b></p>`; },
+    tryit: "<b>Try this:</b> change the population mean to 1.5150. The same match now gives an LR near 160, because the value has become rarer." },
+  { mod: "transfer", title: "Two fragments: transferred, or picked up by chance?",
+    load() { const t = CASE.transfer; setVals({ "tr-what": "glass fragments", "tr-n": "2", "tr-t0": t.t0, "tr-tn": t.tn, "tr-b0": t.b0, "tr-bn": t.bn, "tr-p": t.p, "tr-pc": t.pc }); $("tr-preset").selectedIndex = -1; transfer(); },
+    intro: `<p>Finding glass on clothing is common. Evett's (1986) estimates for glass: after breaking a window there is a <b>6%</b> chance that exactly two fragments stay on the clothing (t₂) and essentially no chance of none (t₀ = 0). In everyday life <b>37%</b> of people carry no glass (b₀) and <b>11%</b> carry exactly two fragments (b₂). We set p = p꜀ = 1 to leave out the glass type, because the refractive index step already covers it.</p>`,
+    look: ["The two bars: how probable it is to find two fragments under each proposition.", "Which side the likelihood ratio supports."],
+    q: "Why does finding two fragments, on its own, favour the defence?",
+    a() { const L = caseLR();
+      return `<p>LR = <b>${fmtLR(L.tr)}</b>. Two fragments are more often picked up innocently (11%) than left behind by breaking the window (6% × 37% ≈ 2.2%). The count helps the prosecution only once the glass is shown to match the window. Because t₀ = 0, the two glass results combine by multiplying: ${fmtLR(L.tr)} × ${fmtLR(L.ri)} ≈ <b>${fmtLR(L.tr * L.ri)}</b>, ${E.verbal(L.tr * L.ri, "the glass coming from this window", "another source")}.</p>`; },
+    tryit: "<b>Try this:</b> set p to 0.01, as if this were a 1-in-100 type of glass. The LR jumps a hundredfold. That is the same information as the refractive index step, so count it once: here or there, not both." },
+  { mod: "dna", title: "Whose blood is on the window frame?",
+    load() { dRows = CASE.loci.map((l) => l.slice()); setVals({ "d-theta": CASE.theta, "d-pop": CASE.pop }); $("d-preset").selectedIndex = -1; dnaRowsRender(); dna(); },
+    intro: `<p>Exhibit D1 is entered: a partial profile at <b>4 loci</b> that matches the suspect, with invented allele frequencies. <b>θ = 0.01</b> allows for relatives within subpopulations. About <b>60,000</b> people live within reach of the shop.</p>`,
+    look: ["The profile frequency and the likelihood ratio.", "The bars: each locus's weight in bans. They add up to the total.", "The three tiles, especially the last one."],
+    q: "The profile frequency is about 1 in 1.8 million. Is that the chance the suspect is innocent?",
+    a() { const d = caseLR().dna;
+      return `<p><b>No.</b> It is the chance that an unrelated person would match. Among ${CASE.pop.toLocaleString("en-US")} people we would expect about ${fmt(d.expected, 2)} other matches, so if everyone were equally likely beforehand, P(the suspect is the source) ≈ <b>${(100 * d.pSource).toFixed(1)}%</b>, not 99.99995%. Swapping the two is the <b>prosecutor's fallacy</b>. And the DNA speaks to <i>whose</i> blood it is, not when or how it got there.</p>`; },
+    tryit: () => `<b>Try this:</b> set θ to 0. The LR rises to about ${fmtLR(caseLR().dna0.lr)}, because plain Hardy–Weinberg ignores shared ancestry. Labs keep θ above 0 so the error, if any, falls in the suspect's favour.` },
+  { mod: "case", title: "Putting it together",
+    load() { const L = caseLR(); caseItems = [{ name: "Glass refractive index (G1 vs G2)", lr: L.ri }, { name: "Two glass fragments (transfer)", lr: L.tr }, { name: "Blood on window frame (D1)", lr: L.dna.lr }]; $("k-pop").value = CASE.pop; caseRender(); },
+    intro: `<p>The three likelihood ratios are now in the case. The starting point is 1 in 60,000: before any of this evidence, anyone within reach of the shop could have been at that window. The time of death is not an LR here; it bears on the suspect's story rather than on these propositions.</p>`,
+    look: ["The combined LR and the total weight in bans.", "The chart: each bar moves the log-odds from the prior on the left towards the posterior."],
+    q: "How much does the conclusion depend on the starting population?",
+    a() { const L = caseLR(), lr = L.ri * L.tr * L.dna.lr, post = (n) => E.oddsToProb(lr / (n - 1));
+      return `<p>A lot. With 60,000 people, P(the suspect was at the window | evidence) ≈ <b>${(100 * post(60000)).toFixed(1)}%</b>. If the person could have been anyone in a country of 5 million, the same evidence gives only about <b>${(100 * post(5000000)).toFixed(0)}%</b>. The combined LR (${fmtLR(lr)}, ${E.bans(lr).toFixed(1)} bans) does not change; the prior does. That is why forensic scientists report the LR and leave the prior to the court.</p>`; },
+    tryit: "<b>Try this:</b> set the population to 5000000. Then remove the DNA line (×) to see how little the glass does alone." },
+  { mod: "explain", title: "Bonus: the prosecutor's fallacy in a real case",
+    load() { setVals({ "x-an": "double murder", "x-a1": "1/21700", "x-a2": "176/21700", "x-bn": "double SIDS", "x-b1": "1/1300", "x-b2": "5.7/1300" }); $("x-preset").selectedIndex = 0; explain(); },
+    intro: `<p>A different kind of question. When two explanations both account for what happened, the evidence cannot separate them, and what matters is how probable each explanation was to begin with. This is the Sally Clark case, with Hill's (2004) figures as used in Adam (2010) §11.8.</p>`,
+    look: ["The odds of double murder against double SIDS.", "The grey bars: what you get by treating the second death as independent of the first."],
+    q: "Why was the “1 in 73 million” figure given at trial so misleading?",
+    a() { const r = E.compare(1 / 21700, 176 / 21700, 1 / 1300, 5.7 / 1300, false);
+      return `<p>It squared the chance of one SIDS death, as if a second death in the same family were independent of the first, when shared genes and environment make it far more likely. With Hill's figures the odds of double murder against double SIDS are about <b>${fmt(r.odds, 2)} : 1</b> (≈${(100 * r.prob).toFixed(0)}% murder), nothing like the near-certainty the jury heard. And a rare event is not the probability of innocence: the prosecutor's fallacy again.</p>`; },
+    tryit: "<b>Try this:</b> switch the example to Dawid's (2002) figures and compare." },
+];
+let tourStep = -1;
+function tour(i) {
+  if (i < 0 || i >= STEPS.length) { tourStep = -1; $("coach").hidden = true; show("guide"); return; }
+  tourStep = i;
+  const s = STEPS[i];
+  location.hash = s.mod; show(s.mod);
+  s.load();
+  $("coach-title").textContent = s.title;
+  $("coach-count").textContent = `Worked example · step ${i + 1} of ${STEPS.length}`;
+  $("coach-intro").innerHTML = s.intro;
+  $("coach-look").innerHTML = s.look.map((l) => `<li>${l}</li>`).join("");
+  $("coach-q").textContent = s.q;
+  $("coach-a").hidden = true; $("coach-a").innerHTML = ""; $("coach-show").hidden = false;
+  $("coach-try").innerHTML = typeof s.tryit === "function" ? s.tryit() : s.tryit;
+  $("coach-back").disabled = i === 0;
+  $("coach-next").textContent = i === STEPS.length - 1 ? "Finish" : "Next step →";
+  $("coach").hidden = false;
+  $("coach").scrollIntoView({ block: "start", behavior: "smooth" });
+}
+$("coach-show").addEventListener("click", () => { $("coach-a").innerHTML = STEPS[tourStep].a(); $("coach-a").hidden = false; $("coach-show").hidden = true; });
+$("coach-next").addEventListener("click", () => tour(tourStep + 1));
+$("coach-back").addEventListener("click", () => tour(tourStep - 1));
+$("coach-exit").addEventListener("click", () => tour(-1));
+$("guide-start").addEventListener("click", () => tour(0));
+$("guide-steps").innerHTML = STEPS.map((s, i) => `<li><button type="button" data-step="${i}"><span class="k">${i + 1}</span><span>${s.title}<span class="m">${s.mod === "case" ? "Case summary" : s.mod === "explain" ? "Competing explanations" : s.mod === "cooling" ? "Time since death" : s.mod === "measure" ? "Measurement match" : s.mod === "dna" ? "DNA profile" : "Transfer evidence"}</span></span></button></li>`).join("");
+$("guide-steps").addEventListener("click", (e) => { const b = e.target.closest("[data-step]"); if (b) tour(+b.dataset.step); });
+
 // ---------- navigation ----------
-const MODS = [["measure", "Measurement match", "§11.6"], ["transfer", "Transfer evidence", "§11.7"], ["dna", "DNA profile", "§8.4"],
+const MODS = [["guide", "Worked example", "start here"], ["measure", "Measurement match", "§11.6"], ["transfer", "Transfer evidence", "§11.7"], ["dna", "DNA profile", "§8.4"],
   ["cooling", "Time since death", "§3.5"], ["explain", "Competing explanations", "§11.8"], ["case", "Case summary", "Bayes"]];
 $("nav").innerHTML = MODS.map(([k, n, s]) => `<button type="button" role="tab" id="tab-${k}" aria-controls="mod-${k}" data-mod="${k}">${n}<span class="mono">${s}</span></button>`).join("");
 function show(k) {
-  if (!MODS.some((m) => m[0] === k)) k = "measure";
+  if (!MODS.some((m) => m[0] === k)) k = "guide";
   MODS.forEach(([m]) => { $("mod-" + m).hidden = m !== k; $("tab-" + m).setAttribute("aria-selected", m === k); });
   Object.keys(charts).forEach((id) => { const c = charts[id]; if ($(id).offsetParent !== null) c.render(); });
 }
