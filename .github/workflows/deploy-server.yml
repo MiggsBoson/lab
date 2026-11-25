@@ -1,5 +1,5 @@
 # Deploys the live server (server/, a Cloudflare Worker) whenever a change to it
-# reaches main, e.g. when the owner merges a pull request.  The pages themselves are
+# reaches main, e.g. when a pull request is merged.  The pages themselves are
 # published by GitHub Pages as before; this only handles the server.
 #
 # Needs two repository secrets (Settings -> Secrets and variables -> Actions):

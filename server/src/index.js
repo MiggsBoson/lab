@@ -8,7 +8,7 @@
 //   chaos        stickers, spray paint, wear and tear, and the site's shared colours
 //   suggestions  ideas for the lab, with one vote per visitor
 //   events       surprises the server sets off every so often, for everyone at once
-//   usage        daily counts of what people use, for the owner's admin page
+//   usage        daily counts of what people use, for the admin page
 //   admin        the owner's reset and delete controls, locked by the ADMIN_KEY secret
 //
 // Everything lives in one Durable Object, "the lobby".  It handles one message at
