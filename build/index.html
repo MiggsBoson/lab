@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build something · The lab</title>
+  <meta name="description" content="The lab is a sandbox for small web experiments and tools. Paste one prompt into Claude Code and build your own.">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
+  <style>
+    /* Styles only this page needs. */
+    .steps { display: grid; gap: 0.75rem; }
+    .prompt {
+      margin: 0 0 0.75rem; padding: 0.8rem 0.9rem; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--bg); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+    }
+    .good { padding-left: 1.2rem; display: grid; gap: 0.35rem; }
+    h2.section { margin: 2rem 0 0.5rem; font-size: 1.2rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Build something</h1>
+    <p class="lede">The lab is a sandbox for small, novel web experiences and tools. Anyone can add one, and you don't need permission to start.</p>
+
+    <div class="steps">
+      <section class="card">
+        <h2>1. Get Claude Code</h2>
+        <p>Install <a href="https://claude.com/claude-code">Claude Code</a> on your computer (Windows, macOS or Linux) and open it in a folder where you keep projects.</p>
+      </section>
+
+      <section class="card">
+        <h2>2. Paste this</h2>
+        <pre class="prompt" id="prompt">Set me up to build in The lab, a sandbox website for small web experiments and tools: https://github.com/MiggsBoson/lab (live at https://miggsboson.github.io/lab/).
+
+Read https://raw.githubusercontent.com/MiggsBoson/lab/main/CONTRIBUTING.md and follow its "Getting started" steps for my computer: install anything missing, help me make a GitHub account if I need one, sign me in, fork and clone the repo, and open the local preview. Explain each step in a sentence, wait for me whenever I need to click, sign in or choose something, and ask before posting anything on GitHub.
+
+Then ask what I'd like to make, build a first version with me as a new experiment following "Your first experiment", and send it as a pull request. Finally, ask whether I want direct access, and if I do, open an access request.</pre>
+        <div class="row"><button type="button" id="copy">Copy the prompt</button><span class="muted" id="copied" aria-live="polite"></span></div>
+      </section>
+
+      <section class="card">
+        <h2>3. Make something</h2>
+        <p>Claude Code installs anything missing, helps you make a GitHub account if you need one, sets up your own copy of the lab and opens it on your computer. Then it asks what you'd like to make, builds a first version with you, and sends it as a pull request. Once that's merged, your experiment is live here for everyone.</p>
+        <p class="muted">About 20 minutes the first time. You'll be asked before anything is posted on GitHub.</p>
+      </section>
+    </div>
+
+    <h2 class="section">What makes a good lab experiment</h2>
+    <ul class="good">
+      <li>Small and a bit odd. One idea, done in an afternoon.</li>
+      <li>Something strangers do together, like <a href="../tug/">Tug of war</a>, <a href="../jam/">Jam</a> or <a href="../magnets/">Fridge magnets</a>.</li>
+      <li>Or a tool someone would actually use, like <a href="../evidence/">Evidence Lab</a>.</li>
+      <li>Works on a phone. Plain HTML, CSS and JavaScript, with nothing to install.</li>
+    </ul>
+    <p>Stuck for ideas? The suggestion board on the <a href="../">home page</a> shows what people are asking for.</p>
+
+    <footer>
+      Rather do it by hand? Every step the prompt takes is written out in
+      <a href="https://github.com/MiggsBoson/lab/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a>.
+    </footer>
+  </main>
+
+  <script>
+    const copied = document.getElementById("copied");
+    document.getElementById("copy").addEventListener("click", async () => {
+      const text = document.getElementById("prompt").textContent;
+      try {
+        await navigator.clipboard.writeText(text);
+        copied.textContent = "Copied. Paste it into Claude Code.";
+      } catch (e) {
+        const range = document.createRange();
+        range.selectNodeContents(document.getElementById("prompt"));
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+        copied.textContent = "Selected. Press Ctrl+C (or ⌘C) to copy.";
+      }
+    });
+  </script>
+  <script type="module" src="../together.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ import { getSetting, setSetting, getName, setName } from "./settings.js";
 
 export const ROOMS = [
   { page: "home", title: "Home", emoji: "🏠" },
+  { page: "build", title: "Build something", emoji: "🛠️" },
   { page: "evidence", title: "Evidence Lab", emoji: "🔬" },
   { page: "market", title: "Bad luck or a big player?", emoji: "🛢️" },
   { page: "jam", title: "Jam", emoji: "🎛️" },
