@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="The reasoning errors behind famous forensic statistics mistakes, and the real cases where they mattered.">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<meta name="theme-color" content="#1f2d3d">
+</head>
+<body>
+<p style="max-width:1180px;margin:16px auto 0;font-size:0.9rem"><a href="../">← The lab</a></p>
+<title>Pitfalls and real cases · Evidence Lab · The lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Evidence Lab: the look shared by every page. Inlined into each page by build_web.py. */
+:root {
+  --bg: #f2f4f6; --surface: #ffffff; --sunk: #f7f9fa; --ink: #121a22; --muted: #536070; --faint: #7f8996;
+  --rule: #d7dde4; --band: #e8ecf0; --band-2: #dde3e9;
+  --hp: #2a78d6; --hp-soft: rgba(42, 120, 214, 0.16);
+  --hd: #eb6834; --hd-soft: rgba(235, 104, 52, 0.16);
+  --accent: #2a78d6;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1116; --surface: #141a21; --sunk: #10151b; --ink: #e7ecf1; --muted: #a0abb7; --faint: #6f7a87;
+    --rule: #27303a; --band: #19212a; --band-2: #1f2832;
+    --hp: #3987e5; --hp-soft: rgba(57, 135, 229, 0.22); --hd: #e0612d; --hd-soft: rgba(224, 97, 45, 0.22);
+    --accent: #3987e5; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1116; --surface: #141a21; --sunk: #10151b; --ink: #e7ecf1; --muted: #a0abb7; --faint: #6f7a87;
+  --rule: #27303a; --band: #19212a; --band-2: #1f2832;
+  --hp: #3987e5; --hp-soft: rgba(57, 135, 229, 0.22); --hd: #e0612d; --hd-soft: rgba(224, 97, 45, 0.22);
+  --accent: #3987e5; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+}
+.app { max-width: 1180px; margin: 0 auto; padding-block: 28px 56px; display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); line-height: 1.05; font-weight: 700; }
+h2 { font-size: 1.6rem; line-height: 1.15; font-weight: 600; }
+h3 { font-size: 0.95rem; font-family: var(--font-body); font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent); text-underline-offset: 2px; }
+.num, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .small { font-size: 0.84rem; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+header.top { display: grid; gap: 8px; }
+header.top .lede { max-width: 70ch; color: var(--muted); font-size: 1.02rem; }
+.hp-c { color: var(--hp); } .hd-c { color: var(--hd); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; display: grid; gap: 14px; min-width: 0; }
+.btn { font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 4px; padding: 7px 12px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg); font-weight: 500; }
+.btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--rule); }
+.ref { font-size: 0.82rem; color: var(--faint); }
+.note { border-left: 3px solid var(--rule); padding: 2px 0 2px 12px; font-size: 0.9rem; color: var(--muted); max-width: 75ch; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.stat { border-top: 2px solid var(--ink); padding-top: 6px; display: grid; gap: 1px; }
+.stat .v { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; line-height: 1.15; }
+.stat .l { font-size: 0.8rem; color: var(--muted); }
+footer { border-top: 1px solid var(--rule); padding-top: 14px; font-size: 0.82rem; color: var(--faint); display: grid; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---- Site navigation (every page) ---- */
+nav.site { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
+nav.site .brand { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; color: var(--ink); text-decoration: none; }
+nav.site .links { display: flex; gap: 2px 16px; flex-wrap: wrap; font-size: 0.9rem; }
+nav.site .links a { color: var(--muted); text-decoration: none; padding: 4px 0; white-space: nowrap; }
+nav.site .links a:hover { color: var(--ink); }
+nav.site .links a[aria-current="page"] { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* ---- Glossary terms in running text, and their pop-up ---- */
+a.term { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--faint); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a.term:hover { color: var(--accent); text-decoration-color: currentColor; }
+.term-pop { position: absolute; z-index: 60; max-width: calc(100vw - 24px); background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16); padding: 10px 12px; display: grid; gap: 4px; font-family: var(--font-body); font-size: 0.88rem; line-height: 1.45; text-align: left; }
+.term-pop b { font-family: var(--font-display); font-size: 1rem; font-weight: 600; }
+.term-pop .cat { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); }
+.term-pop a { font-size: 0.84rem; justify-self: start; }
+
+/* ---- Learning path: Bayes basics -> worked example -> pitfalls ---- */
+ol.path { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; counter-reset: path; }
+ol.path li { counter-increment: path; }
+ol.path a { display: grid; grid-template-columns: 26px 1fr; gap: 0 8px; align-items: baseline; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); text-decoration: none; height: 100%; }
+ol.path a::before { content: counter(path); font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); grid-row: span 2; }
+ol.path a:hover { border-color: var(--ink); }
+ol.path .t { font-weight: 600; font-size: 0.92rem; }
+ol.path .m { font-size: 0.78rem; color: var(--muted); }
+ol.path li.here a { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+ol.path li.here a::before { color: var(--accent); }
+
+/* ---- Reading pages ---- */
+.layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 36px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
+.toc { position: sticky; top: 16px; font-size: 0.86rem; max-height: calc(100vh - 32px); overflow-y: auto; }
+@media (max-width: 900px) { .toc { position: static; max-height: none; } }
+.toc summary { cursor: pointer; font-weight: 600; margin-bottom: 6px; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.toc a { display: flex; gap: 6px; padding: 3px 0; color: var(--muted); text-decoration: none; }
+.toc a:hover, .toc a.on { color: var(--ink); }
+.toc a.on { font-weight: 600; }
+.toc a span { flex: none; min-width: 18px; font-family: var(--font-mono); font-size: 0.76rem; color: var(--faint); padding-top: 1px; }
+.toc .grp { margin: 10px 0 2px; font-family: var(--font-mono); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--faint); }
+.prose { display: grid; gap: 34px; min-width: 0; }
+.prose section { display: grid; gap: 12px; scroll-margin-top: 14px; min-width: 0; }
+.prose section > * { max-width: 72ch; }
+.prose section > .panel, .prose section > .wide { max-width: 860px; }
+.prose h2 { font-size: 1.55rem; display: flex; gap: 10px; align-items: baseline; }
+.prose h2 .k { font-family: var(--font-mono); font-size: 0.85rem; font-weight: 500; color: var(--faint); }
+.prose h3 { font-size: 1rem; margin-top: 4px; }
+.prose ul, .prose ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.prose li { padding-left: 2px; }
+.lede-big { font-size: 1.08rem; color: var(--muted); max-width: 68ch; }
+.formula { font-family: var(--font-mono); font-size: 0.92rem; background: var(--sunk); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 14px; overflow-x: auto; white-space: pre; line-height: 1.6; }
+.formula .c { color: var(--muted); }
+.callout { border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 6px 6px 0; padding: 10px 14px; display: grid; gap: 6px; }
+.callout.warn { border-left-color: var(--hd); }
+.aside { border: 1px dashed var(--rule); border-radius: 6px; padding: 12px 14px; display: grid; gap: 8px; font-size: 0.94rem; }
+.aside > .eyebrow { margin-bottom: -2px; }
+.try { font-size: 0.9rem; color: var(--muted); }
+.try a { white-space: nowrap; }
+.table-scroll { overflow-x: auto; }
+table.simple { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+table.simple th, table.simple td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table.simple th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+table.simple td.n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+details.qa { border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); padding: 10px 14px; }
+details.qa summary { cursor: pointer; font-weight: 600; }
+details.qa[open] summary { margin-bottom: 8px; }
+details.qa > div { display: grid; gap: 8px; color: var(--ink); }
+.qa-list { display: grid; gap: 8px; }
+.claim { font-family: var(--font-display); font-size: 1.12rem; font-weight: 500; line-height: 1.35; border-left: 3px solid var(--hd); padding: 2px 0 2px 12px; }
+.fix { border-left: 3px solid var(--hp); padding: 2px 0 2px 12px; }
+.case-meta { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+.refs { display: grid; gap: 8px; padding-left: 1.3em; margin: 0; }
+.refs li { font-size: 0.92rem; }
+.pager { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.pager a { display: grid; gap: 2px; text-decoration: none; padding: 8px 12px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); color: var(--ink); }
+.pager a:hover { border-color: var(--ink); }
+.pager a span { font-size: 0.78rem; color: var(--muted); }
+.pager a.next { text-align: right; margin-left: auto; }
+.field-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.field { display: grid; gap: 3px; }
+.field label { font-size: 0.86rem; color: var(--muted); }
+.field .hint { font-size: 0.76rem; color: var(--faint); }
+.field output { font-family: var(--font-mono); font-size: 0.9rem; color: var(--ink); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.chart { position: relative; width: 100%; min-width: 0; }
+.chart svg { display: block; overflow: visible; max-width: 100%; height: auto; }
+.chart text { fill: var(--muted); font-family: var(--font-body); font-size: 11px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 0.8rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+.big { font-family: var(--font-display); font-size: clamp(1.8rem, 4.5vw, 2.4rem); font-weight: 700; line-height: 1.05; }
+:target { scroll-margin-top: 14px; }
+
+.cases { display: grid; gap: 14px; }
+.case-card { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 8px; scroll-margin-top: 14px; max-width: 860px; }
+.case-card h3 { font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; }
+.case-card .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.case-card .tags a { font-size: 0.78rem; border: 1px solid var(--rule); border-radius: 3px; padding: 1px 7px; text-decoration: none; color: var(--muted); }
+.case-card .tags a:hover { color: var(--ink); border-color: var(--ink); }
+.er-out { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 560px) { .er-out { grid-template-columns: 1fr; } }
+</style>
+
+<div class="app">
+  <nav class="site" aria-label="Evidence Lab"><a class="brand" href="index.html">Evidence Lab</a><div class="links"><a href="index.html">Workbench</a><a href="bayes.html">Bayes basics</a><a href="pitfalls.html" aria-current="page">Pitfalls &amp; cases</a><a href="glossary.html">Glossary</a></div></nav>
+  <header class="top">
+    <span class="eyebrow">Learning path · part 3 of 3</span>
+    <h1>Pitfalls and real cases</h1>
+    <p class="lede-big">The same few reasoning errors turn up in courtrooms again and again. Each one has a name, a simple fix, and at least one real case where it mattered. About 15 minutes.</p>
+  </header>
+  <ol class="path" aria-label="Learning path"><li><a href="bayes.html"><span class="t">Bayes basics</span><span class="m">How evidence changes belief · 25 min</span></a></li><li><a href="index.html#guide"><span class="t">Worked example</span><span class="m">One case through every module · 15 min</span></a></li><li class="here"><a href="pitfalls.html" aria-current="step"><span class="t">Pitfalls &amp; real cases</span><span class="m">Famous mistakes and their fixes · 15 min</span></a></li></ol>
+
+  <div class="layout">
+    <nav class="toc" aria-label="On this page">
+      <details open id="toc-d"><summary>On this page</summary>
+        <p class="grp">Pitfalls</p>
+        <ol>
+          <li><a href="#prosecutors-fallacy"><span>1</span>Prosecutor’s fallacy</a></li>
+          <li><a href="#defence-fallacy"><span>2</span>Defence fallacy</a></li>
+          <li><a href="#base-rate-neglect"><span>3</span>Base-rate neglect</a></li>
+          <li><a href="#independence"><span>4</span>The independence trap</a></li>
+          <li><a href="#conversion"><span>5</span>Numerical conversion</a></li>
+          <li><a href="#error-rates"><span>6</span>Forgetting error rates</a></li>
+          <li><a href="#double-counting"><span>7</span>Double counting</a></li>
+          <li><a href="#consistent-with"><span>8</span>“Consistent with”</a></li>
+          <li><a href="#individualisation"><span>9</span>Individualisation</a></li>
+          <li><a href="#bias"><span>10</span>Context and bias</a></li>
+          <li><a href="#selection"><span>11</span>Data chosen afterwards</a></li>
+        </ol>
+        <p class="grp">Cases</p>
+        <ol>
+          <li><a href="#collins"><span>1968</span>People v Collins</a></li>
+          <li><a href="#deen"><span>1993</span>R v Deen</a></li>
+          <li><a href="#adams"><span>1996</span>R v Adams</a></li>
+          <li><a href="#clark"><span>1999</span>Sally Clark</a></li>
+          <li><a href="#de-berk"><span>2003</span>Lucia de Berk</a></li>
+          <li><a href="#mayfield"><span>2004</span>Brandon Mayfield</a></li>
+          <li><a href="#r-v-t"><span>2010</span>R v T</a></li>
+          <li><a href="#spot"><span>✓</span>Spot the fallacy</a></li>
+        </ol>
+      </details>
+    </nav>
+
+    <div class="prose">
+      <section id="prosecutors-fallacy">
+        <h2><span class="k">1</span>The prosecutor’s fallacy</h2>
+        <p class="claim">“The chance of a match if the suspect is innocent is 1 in a million. So the chance the suspect is innocent is 1 in a million.”</p>
+        <p>This swaps P(match | innocent) for P(innocent | match), the <a class=term href=glossary.html#transposed-conditional>transposed conditional</a>. In a city of 5 million, a 1-in-a-million profile would be shared by about 5 other people. If the match were the only evidence, the suspect would be one of about 6 people who match, so the chance of being the source would be about 1 in 6, not 999,999 in a million. Thompson and Schumann (1987) gave the error its name.</p>
+        <p class="fix"><b>Fix:</b> report the likelihood ratio, or how many other people would be expected to match, and leave the prior to the court.</p>
+        <p class="try">Try it: <a href="index.html#step-4">worked example, step 4</a> · <a href="bayes.html#frequencies">seeing it with counts</a> · Cases: <a href="#deen">R v Deen</a>, <a href="#clark">Sally Clark</a></p>
+      </section>
+
+      <section id="defence-fallacy">
+        <h2><span class="k">2</span>The defence fallacy</h2>
+        <p class="claim">“About 5 other people in the city would match. So the suspect has only a 1 in 6 chance of being the source, and the DNA is worthless.”</p>
+        <p>The DNA has taken the suspect from 1 in 5 million to 1 in 6. That is a likelihood ratio of a million, 6 <a class=term href=glossary.html#ban>bans</a>. The remaining doubt has to be settled by the rest of the evidence, such as who had access to the scene, not by discarding this item. Thompson and Schumann named this one too.</p>
+        <p>A famous variant came up in the O. J. Simpson trial (1995). The defence argued that very few men who beat their wives go on to murder them. I. J. Good pointed out in <i>Nature</i> that the relevant question is different: of battered women who <i>are</i> murdered, how many were killed by their batterer? That fraction is far larger, because the wife had in fact been murdered.</p>
+        <p class="fix"><b>Fix:</b> combine the evidence with everything else, rather than judging it alone against the whole population.</p>
+        <p class="try">See: <a class=term href=glossary.html#defence-fallacy>defence fallacy</a> in the glossary · <a href="bayes.html#prior">the prior</a></p>
+      </section>
+
+      <section id="base-rate-neglect">
+        <h2><span class="k">3</span>Base-rate neglect</h2>
+        <p class="claim">“The drug dog is right 90% of the time, so a car it alerts on is 90% likely to be carrying drugs.”</p>
+        <p>Suppose (illustrative numbers) 1 car in 100 carries drugs, the dog alerts on 90% of those, and wrongly on 10% of the rest. Out of 1,000 cars, 10 carry drugs and the dog alerts on 9 of them. Of the 990 clean cars, it alerts on 99. So of the 108 alerts, only 9 are right: about 8%, not 90%. The rarity of what you are looking for, the <a class=term href=glossary.html#base-rate>base rate</a>, dominates.</p>
+        <p class="fix"><b>Fix:</b> turn percentages into counts out of a round number (<a class=term href=glossary.html#natural-frequencies>natural frequencies</a>). The answer usually becomes obvious.</p>
+        <p class="try">Try it: <a href="bayes.html#frequencies">seeing it with counts</a></p>
+      </section>
+
+      <section id="independence">
+        <h2><span class="k">4</span>The independence trap</h2>
+        <p class="claim">“The chance of one cot death in a family like this is 1 in 8,543, so the chance of two is 1 in 8,543², about 1 in 73 million.”</p>
+        <p>Multiplying probabilities is only valid for <a class=term href=glossary.html#independence>independent</a> events. A family that has lost one baby to sudden infant death may share genes and circumstances that make a second death more likely, so P(second | first) is much bigger than P(first). The product rule says to multiply by P(second | first). Squaring badly overstated how rare two natural deaths were. The same mistake inflated the figures in <a href="#collins">People v Collins</a>, where features such as a beard and a moustache, which tend to go together, were multiplied as if they had nothing to do with each other.</p>
+        <p class="fix"><b>Fix:</b> multiply only conditional probabilities, P(A) × P(B | A), and say where each comes from.</p>
+        <p class="try">Try it: <a href="index.html#step-6">worked example, step 6</a> · <a href="index.html#explain">competing explanations</a> · Cases: <a href="#clark">Sally Clark</a>, <a href="#collins">Collins</a></p>
+      </section>
+
+      <section id="conversion">
+        <h2><span class="k">5</span>Numerical conversion</h2>
+        <p class="claim">“A 1-in-a-million profile means you would have to test a million people to find another match.”</p>
+        <p>Among a million unrelated people about one match is <i>expected</i>, and the chance that at least one of them matches is 1 − (1 − 1/1,000,000)<sup>1,000,000</sup>, about 63%. Koehler (1993) described this <a class=term href=glossary.html#numerical-conversion-error>numerical conversion error</a>. The same sum appears in <a href="#collins">Collins</a>: even taking the prosecutor’s 1 in 12 million at face value, the court’s own appendix worked out that, if one couple in the area fitted the description, the chance of at least one more was about 40%.</p>
+        <p class="fix"><b>Fix:</b> work out how many matches you would expect in the relevant population. The DNA module’s “other matching people expected” tile does exactly this.</p>
+        <p class="try">Try it: <a href="index.html#dna">DNA profile</a>, then change the population</p>
+      </section>
+
+      <section id="error-rates">
+        <h2><span class="k">6</span>Forgetting error rates</h2>
+        <p class="claim">“The profile has a match probability of 1 in a billion, so the likelihood ratio is a billion.”</p>
+        <p>A reported match can also be a false positive: contamination, a mislabelled tube, a misread result. If that happens once in every thousand cases, the probability of a reported match from someone who isn’t the source is about 1 in a billion <i>plus</i> 1 in a thousand. The larger of the two wins, so the LR is about 1,000, not a billion (Thompson, Taroni and Aitken 2003).</p>
+        <div class="formula">LR ≈ 1 ÷ (match probability + false-positive probability)</div>
+        <div class="panel" id="w-er">
+          <div class="field-row">
+            <div class="field"><label for="er-m">Random match probability</label><input id="er-m" type="range" min="-12" max="-3" step="0.5" value="-9"><output id="er-m-v"></output></div>
+            <div class="field"><label for="er-f">False-positive probability</label><input id="er-f" type="range" min="-7" max="-2" step="0.5" value="-3"><output id="er-f-v"></output></div>
+          </div>
+          <div class="er-out" id="er-out"></div>
+          <p class="note" id="er-note"></p>
+        </div>
+        <p class="fix"><b>Fix:</b> know your method’s <a class=term href=glossary.html#error-rate>error rate</a>, measured by blind proficiency tests, and include it. A one-in-a-billion figure only means something when errors are rarer still.</p>
+      </section>
+
+      <section id="double-counting">
+        <h2><span class="k">7</span>Double counting</h2>
+        <p class="claim">“The fragments’ refractive index matches the window (LR 20), and they are a 1-in-100 type of glass (×100), so together that’s 2,000.”</p>
+        <p>If the measurement LR already reflects how rare that refractive index is, the 1-in-100 type is the same information counted twice. Likewise, evidence used to narrow the list of suspects (the prior) shouldn’t be counted again as evidence.</p>
+        <p class="fix"><b>Fix:</b> let each piece of information in once. Put related items into one model, as the transfer module does with p and p꜀.</p>
+        <p class="try">Try it: <a href="index.html#step-3">worked example, step 3</a> · <a class=term href=glossary.html#double-counting>double counting</a> · <a class=term href=glossary.html#conditional-independence>conditional independence</a></p>
+      </section>
+
+      <section id="consistent-with">
+        <h2><span class="k">8</span>“Consistent with”</h2>
+        <p class="claim">“The fibres on the victim are consistent with the suspect’s jumper.”</p>
+        <p>“Consistent with” only says that P(E | Hp) isn’t tiny. Unless you also know how probable the fibres would be from some other source, P(E | Hd), the statement has no weight. Blue cotton fibres are consistent with millions of jumpers.</p>
+        <p class="fix"><b>Fix:</b> always ask “and how probable is that if the other account is true?”. Then give the ratio.</p>
+        <p class="try">See: <a href="bayes.html#lr">the likelihood ratio</a></p>
+      </section>
+
+      <section id="individualisation">
+        <h2><span class="k">9</span>Individualisation</h2>
+        <p class="claim">“This print was made by the suspect’s finger, to the exclusion of every other finger in the world.”</p>
+        <p>Nobody has compared a mark against every finger in the world. Even if every finger is unique, a smudged partial mark can look like the wrong one, and examiners make mistakes. That is the <a class=term href=glossary.html#uniqueness-fallacy>uniqueness fallacy</a>. US reviews by the National Academy of Sciences (2009) and the President’s Council of Advisors on Science and Technology (PCAST, 2016) criticised claims of <a class=term href=glossary.html#individualisation>individualisation</a> and of zero error rates in fingerprints, firearms and other comparison methods.</p>
+        <p class="fix"><b>Fix:</b> report the strength of support, backed by error rates measured in properly designed tests.</p>
+        <p class="try">Case: <a href="#mayfield">Brandon Mayfield</a></p>
+      </section>
+
+      <section id="bias">
+        <h2><span class="k">10</span>Context and bias</h2>
+        <p class="claim">“The detective mentioned he had confessed, but that didn’t affect my comparison.”</p>
+        <p><a class=term href=glossary.html#contextual-bias>Contextual bias</a> is not dishonesty; it happens to careful experts. In a study by Dror, Charlton and Péron (2006), experienced fingerprint examiners were shown prints they themselves had matched years earlier, but told the prints came from a notorious misidentification. Most of them reached a different conclusion the second time.</p>
+        <p class="fix"><b>Fix:</b> <a class=term href=glossary.html#sequential-unmasking>linear sequential unmasking</a>: study and record the crime-scene mark before seeing the suspect’s reference, and hear other case information only when it is needed. Check conclusions by <a class=term href=glossary.html#blind-verification>blind verification</a>.</p>
+        <p class="try">Case: <a href="#mayfield">Brandon Mayfield</a></p>
+      </section>
+
+      <section id="selection">
+        <h2><span class="k">11</span>Data chosen after the fact</h2>
+        <p class="claim">“She was on duty for so many incidents that the chance of coincidence is 1 in 342 million.”</p>
+        <p>If the incidents are gathered after suspicion has fallen on someone, the data are shaped by the hypothesis they are meant to test. That is the <a class=term href=glossary.html#selection-effect>Texas sharpshooter</a>: draw the target around the bullet holes, then admire the grouping. Across thousands of nurses and wards, some nurse somewhere will be on shift for an unusual cluster by chance. And a tiny <a class=term href=glossary.html#p-value>p value</a> is P(data | chance), not P(chance | data).</p>
+        <p class="fix"><b>Fix:</b> define the events and how they will be collected before looking. Ask how often a cluster like this would turn up for <i>someone</i>, not just for this person.</p>
+        <p class="try">Case: <a href="#de-berk">Lucia de Berk</a> · <a href="bayes.html#schools">p-values and posteriors</a></p>
+      </section>
+
+      <section id="cases-intro">
+        <h2><span class="k">§</span>Real cases</h2>
+        <p>Short summaries of cases in which these errors mattered, oldest first. Each one links back to the pitfalls it shows.</p>
+        <div class="cases">
+          <article class="case-card" id="collins">
+            <span class="case-meta">California, USA · robbery 1964 · Supreme Court of California 1968</span>
+            <h3>People v Collins</h3>
+            <p>Witnesses to a robbery in Los Angeles described a woman with a blonde ponytail and a man with a beard and moustache driving off in a yellow car. At trial a mathematics instructor multiplied six probabilities for these features, figures the prosecutor had suggested without any data, to get 1 in 12 million. The California Supreme Court reversed the conviction: the figures had no basis, the features were not independent, and even on their own terms they did not show that the couple on trial was the only one that fitted.</p>
+            <div class="tags"><a href="#independence">Independence trap</a><a href="#conversion">Numerical conversion</a><a href="#prosecutors-fallacy">Prosecutor’s fallacy</a></div>
+          </article>
+          <article class="case-card" id="deen">
+            <span class="case-meta">England · Court of Appeal, December 1993</span>
+            <h3>R v Deen</h3>
+            <p>A rape conviction resting largely on DNA was quashed because the match probability had been presented to the jury as if it were the probability that someone other than the defendant was the source. It was one of the first cases where the Court of Appeal explained the prosecutor’s fallacy in terms.</p>
+            <div class="tags"><a href="#prosecutors-fallacy">Prosecutor’s fallacy</a></div>
+          </article>
+          <article class="case-card" id="adams">
+            <span class="case-meta">England · Court of Appeal, 1996 and 1997</span>
+            <h3>R v Adams</h3>
+            <p>The only evidence against Denis Adams was a DNA match, quoted at 1 in 200 million. The victim did not pick him out at an identity parade, and he had an alibi. The defence called a statistician who took the jury through Bayes’ theorem so they could combine the DNA with that other evidence. The Court of Appeal ordered a retrial, and in its judgments said this approach should not be used with juries: weighing the non-scientific evidence is the jury’s own task. In the same year, in R v Doheny and Adams, the court gave guidance on presenting DNA figures, such as how many people in the country might share the profile.</p>
+            <div class="tags"><a href="bayes.html#prior">The prior</a><a href="#defence-fallacy">Defence fallacy</a></div>
+          </article>
+          <article class="case-card" id="clark">
+            <span class="case-meta">England · convicted 1999 · conviction quashed 2003</span>
+            <h3>Sally Clark</h3>
+            <p>Sally Clark was convicted of murdering her two baby sons. A paediatrician told the jury that the chance of two cot deaths in a family like hers was 1 in 73 million, by squaring 1 in 8,543. In 2001 the Royal Statistical Society publicly criticised the figure: the deaths were not independent, and the chance of two natural deaths is not the chance of innocence, since double murder is also extremely rare. The conviction was quashed in 2003, after medical evidence that had not been disclosed came to light.</p>
+            <p class="try">Try it: <a href="index.html#step-6">worked example, step 6</a> uses Hill’s (2004) figures.</p>
+            <div class="tags"><a href="#independence">Independence trap</a><a href="#prosecutors-fallacy">Prosecutor’s fallacy</a></div>
+          </article>
+          <article class="case-card" id="de-berk">
+            <span class="case-meta">Netherlands · convicted 2003 · acquitted 2010</span>
+            <h3>Lucia de Berk</h3>
+            <p>A paediatric nurse was convicted of murdering patients, supported by a statistical argument that so many incidents on her shifts had a 1 in 342 million chance of being coincidence. The incidents had been collected after suspicion fell on her, and statisticians, Richard Gill among them, showed that the calculation was flawed in several ways. The case was reopened in 2008, and she was acquitted in 2010.</p>
+            <div class="tags"><a href="#selection">Data chosen afterwards</a><a href="bayes.html#schools">p-values</a></div>
+          </article>
+          <article class="case-card" id="mayfield">
+            <span class="case-meta">USA and Spain · 2004</span>
+            <h3>Brandon Mayfield</h3>
+            <p>After the Madrid train bombings, FBI examiners identified a fingerprint on a bag of detonators as belonging to Brandon Mayfield, an Oregon lawyer, and other examiners confirmed it. The Spanish National Police then matched the print to another man. The FBI withdrew the identification and later apologised. A US Justice Department review found that the computer search had turned up an unusually similar print, and that the examiners who checked the identification already knew what the first examiner had concluded.</p>
+            <div class="tags"><a href="#individualisation">Individualisation</a><a href="#bias">Context and bias</a></div>
+          </article>
+          <article class="case-card" id="r-v-t">
+            <span class="case-meta">England · Court of Appeal, 2010</span>
+            <h3>R v T</h3>
+            <p>A footwear examiner worked out a likelihood ratio from data on how common the shoe’s pattern and size were, combined with judgements about wear, but reported only the words “moderate support” without saying how they were reached. The Court of Appeal criticised the lack of transparency, and said such formulas should not be used for footwear without a firm statistical basis. Forensic statisticians replied (Berger and colleagues 2011) that the likelihood ratio is the logic of weighing evidence whether or not there are good data. The argument over how far numbers can and should be used continues.</p>
+            <div class="tags"><a href="bayes.html#weight">Verbal scales</a><a href="bayes.html#lr">Likelihood ratio</a></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="spot">
+        <h2><span class="k">✓</span>Spot the fallacy</h2>
+        <p>Name the error in each statement, then open it to check.</p>
+        <div class="qa-list">
+          <details class="qa"><summary>“The DNA profile occurs in 1 in 10 million people, so there is only a 1 in 10 million chance he is innocent.”</summary><div><p><b>Prosecutor’s fallacy.</b> 1 in 10 million is P(match | not the source). How likely the suspect is to be the source also depends on how many other people could have left the stain, and on the other evidence.</p></div></details>
+          <details class="qa"><summary>“About 50 people in the country share this blood type, so the blood evidence is irrelevant.”</summary><div><p><b>Defence fallacy.</b> Going from tens of millions of possible sources to 50 is a huge likelihood ratio. It has to be combined with the other evidence, not thrown away.</p></div></details>
+          <details class="qa"><summary>“Each of three witness descriptions fits 1 person in 10, so an innocent person would fit all three with probability 1 in 1,000.”</summary><div><p><b>Independence trap.</b> Descriptions such as height and build go together, so P(all three) is bigger than 1/10 × 1/10 × 1/10.</p></div></details>
+          <details class="qa"><summary>“The lab’s match probability is 1 in a billion, so the chance of a wrong match is 1 in a billion.”</summary><div><p><b>Forgetting error rates.</b> A mix-up or contamination is far more likely than 1 in a billion, and caps the likelihood ratio.</p></div></details>
+          <details class="qa"><summary>“The injuries are consistent with a fall.”</summary><div><p><b>“Consistent with”.</b> Are they also consistent with an assault? Without the probability under the alternative there is no likelihood ratio.</p></div></details>
+          <details class="qa"><summary>“The glass matched on refractive index, LR 20. It’s also a rare type, 1 in 100, so the combined LR is 2,000.”</summary><div><p><b>Double counting</b>, if the refractive index LR already accounts for how rare the glass is. Count each piece of information once.</p></div></details>
+        </div>
+      </section>
+
+      <section id="sources">
+        <h2><span class="k">→</span>Sources</h2>
+        <ul class="refs">
+          <li>Berger, C. E. H., Buckleton, J., Champod, C., Evett, I. W. and Jackson, G. (2011). Evidence evaluation: a response to the court of appeal judgment in R v T. <i>Science &amp; Justice</i> 51, 43–49.</li>
+          <li>Dror, I. E., Charlton, D. and Péron, A. E. (2006). Contextual information renders experts vulnerable to making erroneous identifications. <i>Forensic Science International</i> 156, 74–78.</li>
+          <li>Good, I. J. (1995). When batterer turns murderer. <i>Nature</i> 375, 541.</li>
+          <li>Koehler, J. J. (1993). Error and exaggeration in the presentation of DNA evidence at trial. <i>Jurimetrics</i> 34, 21–39.</li>
+          <li>National Research Council (2009). <i>Strengthening Forensic Science in the United States: A Path Forward</i>. National Academies Press.</li>
+          <li>PCAST (2016). <i>Forensic Science in Criminal Courts: Ensuring Scientific Validity of Feature-Comparison Methods</i>. Executive Office of the President.</li>
+          <li>Thompson, W. C. and Schumann, E. L. (1987). Interpretation of statistical evidence in criminal trials: the prosecutor’s fallacy and the defense attorney’s fallacy. <i>Law and Human Behavior</i> 11, 167–187.</li>
+          <li>Thompson, W. C., Taroni, F. and Aitken, C. G. G. (2003). How the probability of a false positive affects the value of DNA evidence. <i>Journal of Forensic Sciences</i> 48, 47–54.</li>
+          <li>For the Sally Clark figures: Dawid, A. P. (2002) and Hill, R. (2004), as used in Adam (2010) §11.8. More reading on the <a href="bayes.html#reading">Bayes basics</a> page.</li>
+        </ul>
+      </section>
+
+      <nav class="pager" aria-label="Learning path">
+        <a href="index.html#guide"><span>← Part 2 of 3</span>The worked example</a>
+        <a class="next" href="glossary.html"><span>Any time</span>The glossary →</a>
+      </nav>
+    </div>
+  </div>
+  <footer><span>Evidence Lab · a teaching tool. Numbers in examples are illustrative unless a source is named. <a href="index.html">Workbench</a> · <a href="bayes.html">Bayes basics</a> · <a href="pitfalls.html">Pitfalls &amp; cases</a> · <a href="glossary.html">Glossary</a> · <a href="bayes.html#reading">Further reading</a></span></footer>
+</div>
+
+<script>window.EvidenceTerms = {"probability":{"term":"Probability","category":"Probability","short":"A number from 0 to 1 saying how strongly something is to be expected, given the information you have.","body":"0 means impossible and 1 means certain. In evidence evaluation every probability depends on some information, even when that is not written down. Probabilities of outcomes that cannot happen together add up. Probabilities of <a class=term href=glossary.html#independence>independent<\/a> events multiply.","see":["conditional-probability","odds"],"learn":[["Bayes basics: probability and odds","bayes.html#probability"]]},"conditional-probability":{"term":"Conditional probability","category":"Probability","short":"The probability of one thing given that another is known to be true, written P(A | B).","formula":"P(A | B) = P(A and B) ÷ P(B)","body":"Read the bar as ‘given’. The order matters: P(four legs | dog) is close to 1, while P(dog | four legs) is small. Confusing the two is the <a class=term href=glossary.html#transposed-conditional>transposed conditional<\/a>.","see":["transposed-conditional","bayes-theorem"],"learn":[["Bayes basics: probability and odds","bayes.html#probability"]]},"odds":{"term":"Odds","category":"Probability","short":"The probability that something is true divided by the probability that it is false.","formula":"odds = p ÷ (1 − p)      p = odds ÷ (1 + odds)","body":"Odds of 1 (evens) mean a probability of 0.5. Odds of 1 to 99 mean 0.01. <a class=term href=glossary.html#bayes-theorem>Bayes’ theorem<\/a> is simplest in odds: <a class=term href=glossary.html#posterior>posterior<\/a> odds = <a class=term href=glossary.html#likelihood-ratio>likelihood ratio<\/a> × <a class=term href=glossary.html#prior>prior<\/a> odds.","see":["log-odds","probability"],"learn":[["Bayes basics: probability and odds","bayes.html#probability"]]},"bayes-theorem":{"term":"Bayes’ theorem","category":"Probability","short":"The rule for updating belief in the light of evidence. In odds form: posterior odds = likelihood ratio × prior odds.","formula":"P(H | E) = P(E | H) × P(H) ÷ P(E)","body":"Thomas Bayes’s essay was published in 1763, after his death, by Richard Price. In odds form the hard-to-know total P(E) cancels. That is why a forensic scientist can report a <a class=term href=glossary.html#likelihood-ratio>likelihood ratio<\/a> without knowing the <a class=term href=glossary.html#prior>prior<\/a>, and why the court can supply the prior without redoing the science.","see":["prior","posterior","likelihood-ratio"],"learn":[["Bayes basics: Bayes’ theorem","bayes.html#bayes"],["Workbench: case summary","index.html#case"]]},"prior":{"term":"Prior (prior odds)","category":"Probability","short":"How probable a proposition is before the evidence in question is taken into account.","body":"The prior sums up everything else that is known: other evidence, who had the opportunity, alibis. In court, setting it is the job of the judge or jury, not the scientist. The workbench’s case summary uses a simple illustrative prior: the offender is one of N people, all equally likely, so the prior odds are 1 to N − 1.","see":["posterior","base-rate","sensitivity-analysis"],"learn":[["Bayes basics: the prior","bayes.html#prior"],["Worked example, step 5","index.html#step-5"]]},"posterior":{"term":"Posterior (posterior odds)","category":"Probability","short":"How probable a proposition is after the evidence has been taken into account.","body":"Posterior odds = <a class=term href=glossary.html#likelihood-ratio>likelihood ratio<\/a> × prior odds. Today’s posterior is tomorrow’s prior: updating item by item gives the same answer as updating on everything at once, provided the items are <a class=term href=glossary.html#conditional-independence>conditionally independent<\/a>.","see":["prior","bayes-theorem"],"learn":[["Bayes basics: Bayes’ theorem","bayes.html#bayes"]]},"likelihood":{"term":"Likelihood","category":"Probability","short":"The probability of the observed evidence under a particular proposition or parameter value, P(E | H).","body":"Read as a function of the hypothesis rather than the data, P(E | H) is called the likelihood of H. It is not the probability of H: likelihoods across different hypotheses need not add up to 1.","see":["likelihood-ratio","conditional-probability"],"learn":[["Bayes basics: Bayes’ theorem","bayes.html#bayes"]]},"likelihood-ratio":{"term":"Likelihood ratio (LR)","category":"Reporting","short":"How many times more probable the evidence is if one proposition is true than if the other is.","formula":"LR = P(E | Hp) ÷ P(E | Hd)","body":"Above 1 supports <a class=term href=glossary.html#prosecution-proposition>Hp<\/a>, below 1 supports <a class=term href=glossary.html#defence-proposition>Hd<\/a>, and exactly 1 means the evidence cannot tell them apart. It is a statement about the evidence, not the propositions: ‘the findings are 100 times more probable if Hp is true’, never ‘Hp is 100 times more probable’. Every module in the workbench ends with one.","see":["bayes-factor","weight-of-evidence","verbal-scale"],"learn":[["Bayes basics: the likelihood ratio","bayes.html#lr"],["Workbench: measurement match","index.html#measure"]]},"bayes-factor":{"term":"Bayes factor","category":"Statistics","short":"The general statistical name for a likelihood ratio between two hypotheses.","body":"When a hypothesis has unknown parameters, each side of the ratio is a <a class=term href=glossary.html#marginal-likelihood>marginal likelihood<\/a>: the probability of the data averaged over the parameter’s prior. For two simple propositions the Bayes factor and the likelihood ratio are the same thing.","see":["likelihood-ratio","marginal-likelihood"],"learn":[["Bayes basics: the likelihood ratio","bayes.html#lr"]]},"marginal-likelihood":{"term":"Marginal likelihood (model evidence)","category":"Statistics","short":"The probability of the data under a hypothesis, averaged over that hypothesis’s unknown parameters.","formula":"P(E | H) = ∫ P(E | θ, H) p(θ | H) dθ","body":"It is the normalising constant of the <a class=term href=glossary.html#posterior>posterior<\/a>, the counterpart of a partition function in statistical physics. A ratio of two of them is a <a class=term href=glossary.html#bayes-factor>bayes factor<\/a>. It is often computed by thermodynamic integration (path sampling).","see":["bayes-factor","monte-carlo"],"learn":[["Bayes basics: if you know statistical physics","bayes.html#physics"]]},"weight-of-evidence":{"term":"Weight of evidence","category":"Reporting","short":"The logarithm of the likelihood ratio, so that the weights of independent items add instead of multiplying.","formula":"W = log₁₀ LR   (measured in bans)","body":"The term is I. J. Good’s, who used it with Alan Turing in codebreaking at Bletchley Park. Positive weight supports Hp and negative weight supports Hd. Prior <a class=term href=glossary.html#log-odds>log odds<\/a> plus the weight of every item gives the posterior log-odds.","see":["ban","log-odds","likelihood-ratio"],"learn":[["Bayes basics: weight of evidence","bayes.html#weight"],["Workbench: DNA weights by locus","index.html#dna"]]},"ban":{"term":"Ban (and deciban)","category":"Reporting","short":"The unit of weight of evidence. One ban multiplies the odds by 10.","body":"A deciban is a tenth of a ban; Good described it as about the smallest change in weight of evidence a person can directly feel. Turing named the unit after the town of Banbury, where the sheets for his ‘Banburismus’ method were printed. An LR of 2 is about 0.3 bans, 100 is 2 bans and 1,000,000 is 6 bans.","see":["weight-of-evidence","log-odds"],"learn":[["Bayes basics: weight of evidence","bayes.html#weight"]]},"log-odds":{"term":"Log-odds","category":"Probability","short":"The logarithm of the odds. On this scale Bayes’ theorem is addition: posterior log-odds = prior log-odds + weight of evidence.","body":"Even odds are 0, and each <a class=term href=glossary.html#ban>ban<\/a> moves you one step. The chart in the workbench’s case summary is drawn on this scale.","see":["odds","weight-of-evidence"],"learn":[["Workbench: case summary","index.html#case"]]},"natural-frequencies":{"term":"Natural frequencies","category":"Probability","short":"Probabilities written as counts of people or cases, such as ‘9 of the 108 cars the dog alerts on’. They make Bayesian reasoning far easier.","body":"Gigerenzer and Hoffrage (1995) found that people solve Bayesian problems much more often when the information comes as counts than as percentages or conditional probabilities.","see":["base-rate-neglect","bayes-theorem"],"learn":[["Bayes basics: seeing it with counts","bayes.html#frequencies"]]},"base-rate":{"term":"Base rate","category":"Probability","short":"How common something is in the relevant population before any specific evidence. It is the starting point for a prior.","body":"Ignoring it is <a class=term href=glossary.html#base-rate-neglect>base rate neglect<\/a>.","see":["prior","base-rate-neglect"],"learn":[["Pitfalls: base-rate neglect","pitfalls.html#base-rate-neglect"]]},"independence":{"term":"Independence","category":"Probability","short":"Two events are independent if knowing that one happened does not change the probability of the other.","formula":"P(A and B) = P(A) × P(B)        only if A and B are independent\nP(A and B) = P(A) × P(B | A)    always","body":"Treating related events as independent is the <a class=term href=glossary.html#independence-error>independence error<\/a>.","see":["conditional-independence","product-rule","independence-error"],"learn":[["Bayes basics: combining evidence","bayes.html#combining"]]},"conditional-independence":{"term":"Conditional independence","category":"Probability","short":"Items of evidence are conditionally independent if, once you know which proposition is true, learning one tells you nothing more about the other.","body":"This is the condition under which likelihood ratios may be multiplied. Items can be related overall yet conditionally independent, or the other way round. The number of glass fragments and their type are not, so they go through one <a class=term href=glossary.html#transfer>transfer<\/a> model instead of being multiplied.","see":["independence","double-counting","bayesian-network"],"learn":[["Bayes basics: combining evidence","bayes.html#combining"],["Worked example, step 3","index.html#step-3"]]},"product-rule":{"term":"Product rule","category":"Probability","short":"P(A and B) = P(A) × P(B | A). It becomes P(A) × P(B) only for independent events.","see":["independence","independence-error"],"learn":[["Workbench: competing explanations","index.html#explain"]]},"transposed-conditional":{"term":"Transposed conditional","category":"Pitfalls","short":"Mistaking P(A | B) for P(B | A). In court it becomes the prosecutor’s fallacy.","body":"P(evidence | innocent) and P(innocent | evidence) can differ by many orders of magnitude. The same slip turns a <a class=term href=glossary.html#p-value>p value<\/a> into ‘the probability the result was chance’.","see":["prosecutors-fallacy","conditional-probability"],"learn":[["Bayes basics: two questions","bayes.html#two-questions"]]},"bayesian-network":{"term":"Bayesian network","category":"Statistics","short":"A diagram of how propositions and items of evidence depend on one another, with probabilities attached, used to combine evidence that is not independent.","body":"Each node is a variable and each arrow a direct dependence. Software then applies Bayes’ theorem across the whole network. Networks are most useful at activity level, where <a class=term href=glossary.html#transfer>transfer<\/a>, <a class=term href=glossary.html#persistence>persistence<\/a> and <a class=term href=glossary.html#background>background<\/a> all interact.","see":["conditional-independence","hierarchy-of-propositions"],"learn":[["Bayes basics: combining evidence","bayes.html#combining"]]},"sensitivity-analysis":{"term":"Sensitivity analysis","category":"Statistics","short":"Checking how much a conclusion changes when uncertain inputs, such as a prior, a frequency or θ, are varied.","body":"If the conclusion flips within a plausible range of an input, it should not rest on that input. The last step of the worked example does this with the size of the population.","see":["prior","conservative"],"learn":[["Worked example, step 5","index.html#step-5"],["Bayes basics: the prior","bayes.html#prior"]]},"probability-density":{"term":"Probability density","category":"Statistics","short":"For a continuous measurement, the height of its distribution curve: probability per unit of measurement.","body":"Any exact value has probability zero, but the probability of landing in a small window is roughly density × window width. In a likelihood ratio the width cancels, so the LR for a measurement is a ratio of densities.","see":["normal-distribution","jacobian"],"learn":[["Bayes basics: measurements","bayes.html#continuous"],["Workbench: measurement match","index.html#measure"]]},"normal-distribution":{"term":"Normal distribution","category":"Statistics","short":"The bell-shaped curve fixed by a mean and a standard deviation. It is the usual model for measurement error and for many population surveys.","see":["standard-deviation","z-score","probability-density"],"learn":[["Workbench: measurement match","index.html#measure"]]},"standard-deviation":{"term":"Standard deviation","category":"Statistics","short":"A measure of spread. About 68% of a normal distribution lies within one standard deviation of the mean, and 95% within two.","see":["normal-distribution","z-score"],"learn":[["Workbench: measurement match","index.html#measure"]]},"z-score":{"term":"z-score","category":"Statistics","short":"How many standard deviations a value lies from a mean: z = (x − mean) ÷ standard deviation.","body":"In the measurement module z_s says how close the questioned value is to the control and z_σ says how unusual it is in the population. The LR is large when z_s is small and z_σ is large.","see":["standard-deviation","likelihood-ratio"],"learn":[["Worked example, step 2","index.html#step-2"]]},"credible-interval":{"term":"Credible interval","category":"Statistics","short":"A range that contains an unknown quantity with a stated probability, say 95%, given the data and the prior.","body":"The Bayesian counterpart of a <a class=term href=glossary.html#confidence-interval>confidence interval<\/a>. It depends on the prior, which the time-since-death example on the Bayes page makes visible.","see":["confidence-interval","posterior"],"learn":[["Bayes basics: estimating a quantity","bayes.html#estimation"]]},"confidence-interval":{"term":"Confidence interval","category":"Statistics","short":"A range made by a procedure that, over many repeated samples, would contain the true value a stated fraction of the time.","body":"It describes the procedure, not this particular range: a 95% confidence interval is not a 95% probability that the value lies inside. With plenty of data and a vague prior it is often close to the <a class=term href=glossary.html#credible-interval>credible interval<\/a>.","see":["credible-interval","p-value"],"learn":[["Bayes basics: two schools","bayes.html#schools"]]},"p-value":{"term":"p-value","category":"Statistics","short":"The probability, if a ‘nothing going on’ hypothesis is true, of data at least as extreme as what was seen.","body":"It is not the probability that the hypothesis is true. Reading it that way is the same error as the <a class=term href=glossary.html#prosecutors-fallacy>prosecutor’s fallacy<\/a>, and it played a part in the Lucia de Berk case.","see":["transposed-conditional","selection-effect"],"learn":[["Bayes basics: two schools","bayes.html#schools"],["Pitfalls: data chosen after the fact","pitfalls.html#selection"]]},"monte-carlo":{"term":"Monte Carlo","category":"Statistics","short":"Estimating a quantity by random sampling, for example drawing 20,000 plausible sets of inputs and seeing how the answer spreads.","body":"The time-since-death module samples temperatures, room temperatures and body masses this way. Markov chain Monte Carlo methods, Hamiltonian Monte Carlo among them, draw samples straight from a posterior.","see":["marginal-likelihood","jacobian"],"learn":[["Workbench: time since death","index.html#cooling"],["Bayes basics: statistical physics","bayes.html#physics"]]},"jacobian":{"term":"Jacobian","category":"Statistics","short":"The stretch factor when changing variables: how much one quantity changes per unit of another, such as degrees per hour.","formula":"density in t = density in T × |dT/dt|","body":"Rewriting a distribution in a different variable multiplies its density by the Jacobian. Likelihood ratios are unaffected, because both densities pick up the same factor. Posteriors for a quantity are affected, because a prior that is flat in one variable is not flat in another.","see":["probability-density","post-mortem-plateau","prior"],"learn":[["Bayes basics: estimating a quantity","bayes.html#estimation"],["Workbench: time since death","index.html#cooling"]]},"proposition":{"term":"Proposition","category":"Reporting","short":"A statement about the case that is either true or false, such as ‘the blood came from Mr X’. Evidence is weighed against a pair of them.","body":"The pair should not both be true, should matter to the case, and should be fixed before the results are seen where possible. Propositions can be set at different levels: see the <a class=term href=glossary.html#hierarchy-of-propositions>hierarchy of propositions<\/a>.","see":["prosecution-proposition","defence-proposition","hierarchy-of-propositions"],"learn":[["Bayes basics: choosing the propositions","bayes.html#propositions"]]},"prosecution-proposition":{"term":"Hp (prosecution proposition)","category":"Reporting","short":"The proposition put forward by the prosecution, such as ‘the suspect is the source of the stain’. Shown in blue in the workbench.","see":["defence-proposition","proposition"],"learn":[["Bayes basics: choosing the propositions","bayes.html#propositions"]]},"defence-proposition":{"term":"Hd (defence proposition)","category":"Reporting","short":"The alternative put forward by, or for, the defence, such as ‘an unknown, unrelated person is the source’. Shown in orange in the workbench.","body":"Who the alternative is matters a great deal. A brother is far more likely than an unrelated stranger to share a DNA profile, so the LR against ‘his brother’ is much smaller. The choice of <a class=term href=glossary.html#reference-population>reference population<\/a> is part of framing Hd.","see":["prosecution-proposition","reference-population"],"learn":[["Bayes basics: choosing the propositions","bayes.html#propositions"]]},"hierarchy-of-propositions":{"term":"Hierarchy of propositions","category":"Reporting","short":"The levels at which propositions can be set: sub-source (whose DNA), source (whose blood), activity (what was done) and offence (was a crime committed, and by whom).","body":"Described by Cook and colleagues (1998); the ENFSI guideline uses four levels. Higher levels need more case information, such as <a class=term href=glossary.html#transfer>transfer<\/a> and <a class=term href=glossary.html#persistence>persistence<\/a>. The offence level belongs to the court.","see":["proposition","transfer","bayesian-network"],"learn":[["Bayes basics: choosing the propositions","bayes.html#propositions"]]},"evaluative-reporting":{"term":"Evaluative reporting","category":"Reporting","short":"A report that gives the strength of the findings for one proposition against another, usually as a likelihood ratio and its verbal equivalent.","body":"It differs from investigative work, which suggests leads, and from technical reports, which only give results. The ENFSI Guideline for Evaluative Reporting in Forensic Science (2015) sets out how to do it.","see":["likelihood-ratio","verbal-scale"],"learn":[["Bayes basics: weight of evidence","bayes.html#weight"]]},"verbal-scale":{"term":"Verbal scale","category":"Reporting","short":"Words that stand for ranges of likelihood ratio, such as ‘moderate support’ for an LR between 10 and 100.","body":"This tool follows the ENFSI (2015) scale: weak (2–10), moderate (10–100), moderately strong (100–1,000), strong (1,000–10,000), very strong (10,000–1,000,000) and extremely strong (above 1,000,000), with the same words for the alternative below 1. The words communicate a number; they do not replace it.","see":["likelihood-ratio","evaluative-reporting"],"learn":[["Bayes basics: weight of evidence","bayes.html#weight"]]},"probative-value":{"term":"Probative value","category":"Reporting","short":"How much a piece of evidence helps to decide between the propositions. An LR far from 1 has high probative value; an LR of 1 has none.","see":["likelihood-ratio","weight-of-evidence"],"learn":[["Bayes basics: the likelihood ratio","bayes.html#lr"]]},"match-probability":{"term":"Random match probability","category":"DNA","short":"The chance that a person chosen at random from the relevant population would match, for example share a DNA profile.","body":"For a single-source DNA profile it equals the <a class=term href=glossary.html#profile-frequency>profile frequency<\/a>, and the LR is its reciprocal. It is the probability of a match if someone else is the source. It is not the probability that someone else is the source.","see":["profile-frequency","prosecutors-fallacy","error-rate"],"learn":[["Worked example, step 4","index.html#step-4"],["Pitfalls: the prosecutor’s fallacy","pitfalls.html#prosecutors-fallacy"]]},"profile-frequency":{"term":"Profile frequency","category":"DNA","short":"How often a whole DNA profile occurs in a population: the product of the genotype frequencies at each locus.","see":["genotype","hardy-weinberg","match-probability"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"reference-population":{"term":"Reference population","category":"Glass and fibres","short":"The group of possible alternative sources whose frequencies give P(E | Hd): window glass in general, local street heroin, unrelated people in a region.","body":"Choosing it is part of framing <a class=term href=glossary.html#defence-proposition>Hd<\/a>. A different population gives a different LR, as step 2 of the worked example shows.","see":["defence-proposition","control-sample"],"learn":[["Worked example, step 2","index.html#step-2"]]},"control-sample":{"term":"Control (known) sample","category":"Glass and fibres","short":"Material of known origin, such as glass from the broken window, compared with the questioned item.","see":["questioned-sample","reference-population"],"learn":[["Workbench: measurement match","index.html#measure"]]},"questioned-sample":{"term":"Questioned item","category":"Glass and fibres","short":"Material whose source is in question, such as fragments from a suspect’s jacket.","see":["control-sample"],"learn":[["Workbench: measurement match","index.html#measure"]]},"refractive-index":{"term":"Refractive index","category":"Glass and fibres","short":"How strongly a material bends light. For glass it is measured to about four decimal places, and it is the classic forensic measurement match.","see":["probability-density","control-sample"],"learn":[["Worked example, step 2","index.html#step-2"]]},"transfer":{"term":"Transfer","category":"Glass and fibres","short":"Movement of material, such as fibres, glass or DNA, from one person, object or place to another during contact.","body":"Transfer probabilities t₀, t₁, … give the chance that 0, 1, … items are transferred and stay in place. They come from reconstruction experiments. Evett’s model, in the transfer module, weighs them against <a class=term href=glossary.html#background>background<\/a>.","see":["persistence","background","hierarchy-of-propositions"],"learn":[["Workbench: transfer evidence","index.html#transfer"],["Worked example, step 3","index.html#step-3"]]},"persistence":{"term":"Persistence","category":"Glass and fibres","short":"How long transferred material stays put. Glass and fibres fall off over hours, so the time between the event and collection matters.","see":["transfer","background"],"learn":[["Workbench: transfer evidence","index.html#transfer"]]},"background":{"term":"Background","category":"Glass and fibres","short":"Material that is there by chance, unrelated to the case, such as the glass that many people carry on their clothes in everyday life.","body":"b₀, b₁, … are the chances of finding 0, 1, … such items anyway, from surveys of clothing. In Evett’s (1986) figures 11% of people carry exactly two fragments of glass.","see":["transfer","persistence"],"learn":[["Worked example, step 3","index.html#step-3"]]},"locus":{"term":"Locus (plural loci)","category":"DNA","short":"A place on a chromosome that is examined. Forensic profiles use a standard set of STR loci, such as vWA, TH01 and FGA.","see":["allele","str","genotype"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"allele":{"term":"Allele","category":"DNA","short":"One version of a locus. Everyone has two alleles at each locus, one from each parent.","see":["allele-frequency","genotype","locus"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"allele-frequency":{"term":"Allele frequency","category":"DNA","short":"How common an allele is in a population, estimated from a database of profiles.","body":"The workbench’s example frequencies are invented for practice, not taken from a real database.","see":["allele","hardy-weinberg"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"genotype":{"term":"Genotype","category":"DNA","short":"The pair of alleles a person has at a locus.","see":["homozygote","heterozygote","hardy-weinberg"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"homozygote":{"term":"Homozygote","category":"DNA","short":"The same allele twice at a locus. Under Hardy–Weinberg its genotype frequency is p².","see":["heterozygote","hardy-weinberg"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"heterozygote":{"term":"Heterozygote","category":"DNA","short":"Two different alleles at a locus. Under Hardy–Weinberg its genotype frequency is 2pq; the 2 is because either allele could have come from either parent.","see":["homozygote","hardy-weinberg"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"hardy-weinberg":{"term":"Hardy–Weinberg equilibrium","category":"DNA","short":"The model in which the two alleles at a locus pair up at random, so genotype frequencies are p² and 2pq.","body":"It assumes random mating in a large population. Multiplying across loci also assumes the loci are independent of one another (linkage equilibrium). Real populations have substructure, which <a class=term href=glossary.html#theta>θ<\/a> corrects for.","see":["theta","genotype","profile-frequency"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"theta":{"term":"θ (theta, F_ST)","category":"DNA","short":"A correction for shared ancestry within subpopulations, which makes matching genotypes more common than Hardy–Weinberg predicts.","body":"The Balding–Nichols (1994) formulas raise every genotype frequency a little. Typical values are 0.01 to 0.03. It lowers the LR, which is the <a class=term href=glossary.html#conservative>conservative<\/a> direction.","see":["hardy-weinberg","conservative"],"learn":[["Worked example, step 4","index.html#step-4"]]},"str":{"term":"STR (short tandem repeat)","category":"DNA","short":"A stretch of DNA in which a short sequence repeats. The number of repeats varies between people and defines the allele.","see":["locus","allele"],"learn":[["Workbench: DNA profile","index.html#dna"]]},"partial-profile":{"term":"Partial profile","category":"DNA","short":"A DNA profile in which some loci gave no result, often because the sample was small or degraded. Fewer loci mean less weight of evidence.","see":["profile-frequency","weight-of-evidence"],"learn":[["Worked example, step 4","index.html#step-4"]]},"newtons-law-of-cooling":{"term":"Newton’s law of cooling","category":"Time of death","short":"An object cools at a rate proportional to its temperature difference from the surroundings, so its temperature approaches room temperature exponentially.","formula":"T(t) = T_E + (T₀ − T_E) e^(−Zt)","body":"It describes exposed skin reasonably well. The body’s core cools more slowly at first, which the <a class=term href=glossary.html#two-exponential-model>two exponential model<\/a> captures.","see":["two-exponential-model","post-mortem-plateau"],"learn":[["Workbench: time since death","index.html#cooling"]]},"post-mortem-plateau":{"term":"Post-mortem plateau","category":"Time of death","short":"The first hours after death, when core temperature hardly falls because heat has to flow out through the rest of the body first.","body":"On the plateau the <a class=term href=glossary.html#jacobian>jacobian<\/a> |dt/dT| is huge: a small temperature error is worth many hours, so temperature says little about the first few hours.","see":["two-exponential-model","jacobian"],"learn":[["Bayes basics: estimating a quantity","bayes.html#estimation"],["Worked example, step 1","index.html#step-1"]]},"two-exponential-model":{"term":"Two-exponential model","category":"Time of death","short":"A cooling curve for rectal temperature made of a fast and a slow exponential, which reproduces the post-mortem plateau (Marshall and Hoare 1962).","body":"This tool uses the simplified form in Adam (2010): starting at 37.2 °C, with Z = 1.2815·M^(−0.625) − 0.0284 per hour for body mass M in kg, and p = 10Z.","see":["newtons-law-of-cooling","henssge-nomogram"],"learn":[["Workbench: time since death","index.html#cooling"]]},"henssge-nomogram":{"term":"Henssge nomogram","category":"Time of death","short":"The chart used in casework to read time since death from rectal temperature, room temperature and body mass, with corrective factors for clothing, wind and wetness.","see":["two-exponential-model"],"learn":[["Workbench: time since death","index.html#cooling"]]},"conservative":{"term":"Conservative choice","category":"Practice","short":"When an input is uncertain, choosing the value that errs in the defendant’s favour, which lowers the LR for Hp.","body":"Using <a class=term href=glossary.html#theta>θ<\/a> above 0 for DNA is an example. Conservative is not the same as correct: it only keeps the error on one side.","see":["theta","sensitivity-analysis"],"learn":[["Worked example, step 4","index.html#step-4"]]},"error-rate":{"term":"Error rate (false positive)","category":"Practice","short":"How often a method or laboratory reports a match that is not there, through contamination, mislabelling or misreading.","body":"When it is larger than the <a class=term href=glossary.html#match-probability>match probability<\/a>, it sets the ceiling on the LR: roughly 1 ÷ the false-positive rate.","see":["match-probability","individualisation"],"learn":[["Pitfalls: forgetting error rates","pitfalls.html#error-rates"]]},"individualisation":{"term":"Individualisation","category":"Practice","short":"The claim that a mark came from one source to the exclusion of every other source in the world.","body":"It was long the standard conclusion in fingerprint and firearms comparison. The NAS (2009) and PCAST (2016) reports criticised it because it cannot be tested and assumes the method never errs. See the <a class=term href=glossary.html#uniqueness-fallacy>uniqueness fallacy<\/a>.","see":["uniqueness-fallacy","error-rate","contextual-bias"],"learn":[["Pitfalls: individualisation","pitfalls.html#individualisation"],["Case: Brandon Mayfield","pitfalls.html#mayfield"]]},"contextual-bias":{"term":"Contextual bias","category":"Practice","short":"Case information that has nothing to do with the comparison, such as a confession or a detective’s hunch, swaying an expert’s judgement.","body":"Dror, Charlton and Péron (2006) showed experienced fingerprint examiners reaching different conclusions on prints they had judged before, once they were given misleading context.","see":["sequential-unmasking","blind-verification"],"learn":[["Pitfalls: context and bias","pitfalls.html#bias"]]},"sequential-unmasking":{"term":"Linear sequential unmasking","category":"Practice","short":"Examining and documenting the crime-scene mark before seeing the suspect’s reference, and revealing other case information only as it is needed.","see":["contextual-bias","blind-verification"],"learn":[["Pitfalls: context and bias","pitfalls.html#bias"]]},"blind-verification":{"term":"Blind verification","category":"Practice","short":"A second examiner checks a conclusion without knowing the first examiner’s result or the case context.","see":["contextual-bias","sequential-unmasking"],"learn":[["Pitfalls: context and bias","pitfalls.html#bias"]]},"prosecutors-fallacy":{"term":"Prosecutor’s fallacy","category":"Pitfalls","short":"Treating the probability of the evidence if the suspect is innocent as if it were the probability that the suspect is innocent.","body":"Named by Thompson and Schumann (1987). A 1-in-a-million match in a city of 5 million leaves about 5 other people who would match, so the match alone does not make innocence a 1-in-a-million chance. It is a case of the <a class=term href=glossary.html#transposed-conditional>transposed conditional<\/a>.","see":["transposed-conditional","defence-fallacy","match-probability"],"learn":[["Pitfalls: the prosecutor’s fallacy","pitfalls.html#prosecutors-fallacy"],["Worked example, step 4","index.html#step-4"]]},"defence-fallacy":{"term":"Defence fallacy","category":"Pitfalls","short":"Dismissing strong evidence because it still leaves several possible sources, ignoring how far it has narrowed the field.","body":"Named alongside the <a class=term href=glossary.html#prosecutors-fallacy>prosecutor’s fallacy<\/a> by Thompson and Schumann (1987). Going from 1 in 5 million to 1 in 6 is an LR of a million; the remaining doubt has to be settled by the other evidence, not by throwing this away.","see":["prosecutors-fallacy","prior"],"learn":[["Pitfalls: the defence fallacy","pitfalls.html#defence-fallacy"]]},"base-rate-neglect":{"term":"Base-rate neglect","category":"Pitfalls","short":"Ignoring how rare the proposition was to begin with, so a fairly reliable test or witness seems more conclusive than it is.","see":["base-rate","natural-frequencies","prior"],"learn":[["Pitfalls: base-rate neglect","pitfalls.html#base-rate-neglect"],["Bayes basics: seeing it with counts","bayes.html#frequencies"]]},"independence-error":{"term":"Independence error","category":"Pitfalls","short":"Multiplying the probabilities of related events as if they were independent, as in the ‘1 in 73 million’ figure at the Sally Clark trial.","see":["independence","product-rule","conditional-independence"],"learn":[["Pitfalls: the independence trap","pitfalls.html#independence"],["Worked example, step 6","index.html#step-6"]]},"numerical-conversion-error":{"term":"Numerical conversion error","category":"Pitfalls","short":"Thinking that a 1-in-N match probability means N people would have to be tested to find another match.","body":"Among N unrelated people about one match is expected, and the chance of at least one is about 63%. The DNA module’s ‘other matching people expected’ tile gives the right number for any population.","see":["match-probability","prosecutors-fallacy"],"learn":[["Pitfalls: numerical conversion","pitfalls.html#conversion"]]},"double-counting":{"term":"Double counting","category":"Pitfalls","short":"Using the same information twice, for example a glass type’s rarity in both the transfer LR and the measurement LR.","body":"Each piece of information should enter once, either as evidence or in the <a class=term href=glossary.html#prior>prior<\/a>, not both. Related items belong in one model.","see":["conditional-independence","bayesian-network"],"learn":[["Pitfalls: double counting","pitfalls.html#double-counting"],["Worked example, step 3","index.html#step-3"]]},"uniqueness-fallacy":{"term":"Uniqueness fallacy","category":"Pitfalls","short":"Reasoning that because no two marks are exactly alike, a comparison can identify the one true source without error.","body":"Even if every finger is unique, a smudged partial print may still look like the wrong finger, and examiners can err. What matters is how well the method tells sources apart in practice, which is measured by testing.","see":["individualisation","error-rate"],"learn":[["Pitfalls: individualisation","pitfalls.html#individualisation"]]},"selection-effect":{"term":"Selection effect (Texas sharpshooter)","category":"Pitfalls","short":"Choosing or defining the data after looking at it, then testing a hypothesis on that same data. Like painting the target around the bullet holes.","body":"Patterns found this way look far less likely by chance than they are. Somewhere, some nurse will be on shift for an unusual cluster of deaths.","see":["p-value"],"learn":[["Pitfalls: data chosen after the fact","pitfalls.html#selection"],["Case: Lucia de Berk","pitfalls.html#de-berk"]]},"consistent-with":{"term":"‘Consistent with’","category":"Pitfalls","short":"A phrase that says the evidence is possible under one account, without saying how probable it would be under the other. On its own it carries no weight.","see":["likelihood-ratio","probative-value"],"learn":[["Pitfalls: ‘consistent with’","pitfalls.html#consistent-with"]]}};
+/* Glossary pop-ups. Any link with class "term" that points at a glossary entry shows that entry's one-line
+ * definition on hover or keyboard focus. On touch screens the first tap shows it and a second tap
+ * (or "Full entry") opens the glossary. The build puts window.EvidenceTerms (from terms.json)
+ * just above this script, and writes every [[ID]] in the sources as such a link. */
+(function () {
+  "use strict";
+  const T = window.EvidenceTerms || {};
+  const touch = window.matchMedia && window.matchMedia("(hover: none)").matches;
+  let pop = null, anchor = null, tapped = null, timer = null;
+
+  const idOf = (a) => (a.getAttribute("href") || "").split("#")[1] || "";
+  const termOf = (el) => (el && el.closest ? el.closest("a.term") : null);
+
+  function ensure() {
+    if (pop) return pop;
+    pop = document.createElement("div");
+    pop.className = "term-pop"; pop.id = "term-pop"; pop.setAttribute("role", "tooltip"); pop.hidden = true;
+    pop.addEventListener("pointerenter", () => clearTimeout(timer));
+    pop.addEventListener("pointerleave", later);
+    document.body.appendChild(pop);
+    return pop;
+  }
+  function open(a) {
+    const id = idOf(a), t = T[id];
+    if (!t) return;
+    ensure(); clearTimeout(timer);
+    if (anchor && anchor !== a) anchor.removeAttribute("aria-describedby");
+    anchor = a;
+    const here = /glossary\.html$/.test(location.pathname) || document.getElementById("glossary-list");
+    pop.innerHTML = `<span class="cat">${t.category}</span><b>${t.term}</b><span>${t.short}</span>` +
+      `<a href="${here ? "#" : "glossary.html#"}${id}">${here ? "Go to entry" : "Full entry in the glossary"} →</a>`;
+    pop.hidden = false;
+    a.setAttribute("aria-describedby", "term-pop");
+    place();
+  }
+  function place() {
+    if (!anchor || !pop || pop.hidden) return;
+    const r = anchor.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+    const w = Math.min(320, vw - 24);
+    pop.style.width = w + "px";
+    const left = Math.max(12, Math.min(r.left, vw - w - 12));
+    pop.style.left = left + window.scrollX + "px";
+    const h = pop.offsetHeight, below = r.bottom + 6, above = r.top - 6 - h;
+    const top = below + h > window.innerHeight && above > 0 ? above : below;
+    pop.style.top = top + window.scrollY + "px";
+  }
+  function close() {
+    clearTimeout(timer);
+    if (pop) pop.hidden = true;
+    if (anchor) anchor.removeAttribute("aria-describedby");
+    anchor = null; tapped = null;
+  }
+  function later() { clearTimeout(timer); timer = setTimeout(close, 200); }
+
+  document.addEventListener("pointerover", (e) => { if (e.pointerType === "mouse") { const a = termOf(e.target); if (a) open(a); } });
+  document.addEventListener("pointerout", (e) => {
+    if (e.pointerType !== "mouse") return;
+    const a = termOf(e.target);
+    if (a && !a.contains(e.relatedTarget) && !(pop && pop.contains(e.relatedTarget))) later();
+  });
+  document.addEventListener("focusin", (e) => { const a = termOf(e.target); if (a && !touch) open(a); });
+  document.addEventListener("focusout", (e) => { if (termOf(e.target) && !(pop && pop.contains(e.relatedTarget))) later(); });
+  document.addEventListener("click", (e) => {
+    const a = termOf(e.target);
+    if (a && touch && tapped !== a && T[idOf(a)]) { e.preventDefault(); open(a); tapped = a; return; }
+    if (!a && pop && !pop.contains(e.target)) close();
+  });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && anchor) { const a = anchor; close(); a.focus(); } });
+  window.addEventListener("scroll", place, { passive: true });
+  window.addEventListener("resize", place);
+})();
+
+/* Reading pages: on phones start with the contents list folded, and mark the section in view. */
+(function () {
+  "use strict";
+  const toc = document.querySelector(".toc");
+  if (!toc) return;
+  const d = toc.querySelector("details");
+  if (d && window.matchMedia("(max-width: 900px)").matches) d.open = false;
+  const links = [...toc.querySelectorAll('a[href^="#"]')];
+  const byId = new Map(links.map((a) => [a.getAttribute("href").slice(1), a]));
+  if (!("IntersectionObserver" in window)) return;
+  const io = new IntersectionObserver((es) => {
+    es.forEach((e) => { if (e.isIntersecting) { links.forEach((a) => a.classList.remove("on")); const a = byId.get(e.target.id); if (a) a.classList.add("on"); } });
+  }, { rootMargin: "0px 0px -70% 0px" });
+  byId.forEach((a, id) => { const s = document.getElementById(id); if (s) io.observe(s); });
+})();
+</script>
+<script>
+(function () {
+"use strict";
+const $ = (id) => document.getElementById(id);
+function big(x) {
+  x = Number(x.toPrecision(6));  /* 1/1e-9 is 999999999.9999999 in floating point */ if (x >= 1e9) return +(x / 1e9).toPrecision(3) + " billion"; if (x >= 1e6) return +(x / 1e6).toPrecision(3) + " million"; return Math.round(x).toLocaleString("en-US"); }
+const oneIn = (p) => "1 in " + big(1 / p);
+function errorRates() {
+  const m = Math.pow(10, +$("er-m").value), f = Math.pow(10, +$("er-f").value);
+  $("er-m-v").textContent = oneIn(m); $("er-f-v").textContent = oneIn(f);
+  const ideal = 1 / m, real = 1 / (m + (1 - m) * f);
+  const tile = (v, l) => `<div class="stat"><span class="v num">${big(v)}</span><span class="l">${l} · ${Math.log10(v).toFixed(1)} bans</span></div>`;
+  $("er-out").innerHTML = tile(ideal, "LR if the lab never errs") + tile(real, "LR allowing for false positives");
+  $("er-note").textContent = f > m
+    ? `The false-positive probability (${oneIn(f)}) is larger than the match probability (${oneIn(m)}), so it sets the ceiling: the LR can't go much above ${big(1 / f)}.`
+    : `Here errors are rarer than chance matches, so the match probability still dominates.`;
+}
+["er-m", "er-f"].forEach((id) => $(id).addEventListener("input", errorRates));
+errorRates();
+})();
+</script>
+
+<script type="module" src="../together.js"></script>
+</body>
+</html>
