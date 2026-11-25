@@ -74,5 +74,11 @@ Repo: https://github.com/MiggsBoson/lab (Pages: Settings → Pages, deploying `m
 
 ## Friends
 
-- Builders: Settings → Collaborators → add their GitHub username.
-- Requests and bugs: the repo's Issues tab, or message the owner.
+- **Builders** follow [CONTRIBUTING.md](CONTRIBUTING.md): fork, preview locally, send pull requests. No access needed.
+- **Full access:** they open an *Access request* issue (or just send you their GitHub username) and you run
+  `bash tools/approve-access.sh`, which invites each requester you say yes to and closes their request.
+  On a personal repository a collaborator is the most GitHub allows: they can push to `main` (live in a minute),
+  merge pull requests, manage issues and trigger the server deploy, but not change Settings (Pages, secrets,
+  collaborators) or delete the repo. For equal rights, move the repo into a free GitHub organization and make
+  them an owner; the site address then becomes that organization's `github.io`.
+- **Requests and bugs:** the repo's Issues tab.
