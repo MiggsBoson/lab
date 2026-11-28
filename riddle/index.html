@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily riddle · The lab</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icon-192.png">
+  <meta name="theme-color" content="#1f2d3d">
+  <style>
+    /* Styles only this page needs. */
+    #question { font-size: 1.25rem; font-weight: 600; margin: 0 0 1rem; }
+    form { display: flex; gap: 0.5rem; }
+    form input { flex: 1; min-width: 0; }
+    #feedback { min-height: 1.5em; margin: 0.6rem 0 0; }
+    #feedback.right { color: var(--live); font-weight: 600; }
+    #solvers { margin: 0.5rem 0 0; padding-left: 1.4rem; }
+    .tick { color: var(--live); }
+    .wobble { animation: wobble 0.3s; }
+    @keyframes wobble { 25% { translate: -6px 0; } 75% { translate: 6px 0; } }
+    @media (prefers-reduced-motion: reduce) { .wobble { animation: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="../">← The lab</a></p>
+    <h1>Daily riddle</h1>
+    <p class="lede">One riddle a day, the same for everyone.  See who else has cracked it.</p>
+
+    <p id="status" class="muted" aria-live="polite">Connecting…</p>
+
+    <section class="card" id="game" hidden>
+      <p id="question"></p>
+      <form id="form" autocomplete="off">
+        <input type="text" id="guess" maxlength="40" aria-label="Your answer" placeholder="Your answer" enterkeyhint="send">
+        <button type="submit" id="go">Guess</button>
+      </form>
+      <p id="feedback" class="muted" aria-live="polite"></p>
+      <p class="muted"><button type="button" class="secondary" id="hintbtn">Need a hint?</button> <span id="hint" hidden></span></p>
+    </section>
+
+    <section class="card" id="board" hidden>
+      <h2>Solved today</h2>
+      <p class="muted" id="count"></p>
+      <ol id="solvers"></ol>
+    </section>
+
+    <section class="card" id="yesterday" hidden>
+      <h2>Yesterday's answer</h2>
+      <p id="ytext" class="muted"></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { on, send } from "../together.js";
+    import { getName } from "../settings.js";
+
+    const $ = (id) => document.getElementById(id);
+    let got = false;
+
+    // An older server doesn't know about riddles yet (the page and server update a minute
+    // apart), so if nothing comes back, say so rather than showing a dead form.
+    on("open", () => setTimeout(() => {
+      if (!got) $("status").textContent = "The riddle is coming soon: the server is still updating.  Try again in a minute.";
+    }, 4000));
+
+    on("riddle", (m) => {
+      got = true;
+      $("status").hidden = true;
+      $("game").hidden = $("board").hidden = false;
+      // Everything visitors typed (names) goes in with textContent, never as HTML.
+      $("question").textContent = m.q;
+      $("hint").textContent = m.hint;
+      $("guess").disabled = $("go").disabled = m.solved;
+      if (m.solved) {
+        $("feedback").textContent = "You solved it. 🎉";
+        $("feedback").className = "right";
+      }
+      $("count").textContent = m.solverCount === 0
+        ? `Nobody yet.  ${m.guesses} guesses so far.`
+        : `${m.solverCount} solved it, from ${m.guesses} guesses in all.`;
+      $("solvers").replaceChildren(...m.solvers.map((name, i) => {
+        const li = document.createElement("li");
+        li.textContent = name + (i === 0 ? " (first!)" : "");
+        return li;
+      }));
+      $("yesterday").hidden = false;
+      $("ytext").textContent = `"${m.yesterday.q}" It was: ${m.yesterday.a}.`;
+    });
+
+    $("hintbtn").addEventListener("click", () => { $("hint").hidden = false; });
+
+    $("form").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = $("guess").value.trim();
+      if (!text) return;
+      if (!send({ type: "riddle-guess", text, name: getName() })) $("feedback").textContent = "Not connected yet.";
+    });
+
+    on("riddle-result", (m) => {
+      const fb = $("feedback");
+      fb.className = m.right ? "right" : "muted";
+      fb.textContent = m.right ? "Correct! 🎉" : "Not quite.  Try again.";
+      if (m.right) send({ type: "react", emoji: "🎉" });
+      else {
+        $("guess").classList.remove("wobble");
+        void $("guess").offsetWidth;            // restart the animation
+        $("guess").classList.add("wobble");
+        $("guess").select();
+      }
+    });
+  </script>
+</body>
+</html>

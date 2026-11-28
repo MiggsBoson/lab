@@ -37,7 +37,7 @@ const REPORTS_TO_HIDE = 2;              // reports from different visitors
 const ABANDONED_MS = 24 * 3600 * 1000;  // anyone may restart a game with no move for a day
 
 // Chaos
-const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug", "evidence", "market", "build"];
+const PAGES = ["home", "chess", "live", "playground", "hello", "magnets", "note", "jam", "tug", "evidence", "market", "build", "riddle"];
 const STICKERS = [
   "star", "heart", "skull", "cat", "bat", "ghost", "eye", "moon", "mushroom", "spider",
   "frog", "fire", "rose", "crown", "bolt", "gem", "planet", "flower", "alien", "rocket",
@@ -122,6 +122,45 @@ const TUG_END = 40;
 const TUG_PULL_GAP_MS = 70;
 const TUG_SEND_GAP_MS = 80;
 
+// Daily riddle: one riddle a day (the same for everyone, picked by the date).  Anyone can
+// guess; the page lists who solved it today.  The answers are in this public file, so it's
+// for fun, not a lock.  Add riddles at the END of the list so the day's pick doesn't shuffle.
+const RIDDLES = [
+  { q: "What has keys but can't open a lock?", a: ["piano", "keyboard"], hint: "You press it to make music." },
+  { q: "What gets wetter the more it dries?", a: ["towel"], hint: "Found by the shower." },
+  { q: "What has a head and a tail but no body?", a: ["coin"], hint: "Flip it." },
+  { q: "The more of me you take, the more you leave behind. What am I?", a: ["footsteps", "steps", "footstep", "step"], hint: "Walk along a beach." },
+  { q: "What has hands but can't clap?", a: ["clock", "watch"], hint: "It's always counting." },
+  { q: "What goes up but never comes back down?", a: ["age", "your age"], hint: "Birthdays." },
+  { q: "What can you catch but not throw?", a: ["cold", "a cold"], hint: "Achoo." },
+  { q: "What has a neck but no head?", a: ["bottle"], hint: "Often green or clear." },
+  { q: "I'm full of holes but I still hold water. What am I?", a: ["sponge"], hint: "Lives by the sink." },
+  { q: "What runs but never walks, and has a mouth but never talks?", a: ["river"], hint: "It has a bed and a bank too." },
+  { q: "What has one eye but can't see?", a: ["needle"], hint: "Used with thread." },
+  { q: "What belongs to you but is used more by other people?", a: ["name", "your name"], hint: "Everyone calls you it." },
+  { q: "What comes once in a minute, twice in a moment, but never in a thousand years?", a: ["m", "letter m", "the letter m"], hint: "Look at the spelling." },
+  { q: "What can fill a room but takes up no space?", a: ["light", "air", "sound", "music"], hint: "Switch it on." },
+  { q: "What has teeth but never bites?", a: ["comb", "zip", "zipper", "saw", "gear", "cog"], hint: "Several answers work. Think of your morning." },
+  { q: "What is always in front of you but can't be seen?", a: ["future", "the future"], hint: "Not tomorrow's weather exactly." },
+  { q: "What building has the most stories?", a: ["library", "a library"], hint: "Quiet, please." },
+  { q: "What has four legs in the morning, two at noon and three in the evening?", a: ["man", "human", "person", "a man", "a human", "a person"], hint: "The Sphinx asked it." },
+  { q: "What word becomes shorter when you add two letters to it?", a: ["short"], hint: "Say it plainly." },
+  { q: "What kind of room has no doors or windows?", a: ["mushroom"], hint: "Grows in the dark." },
+  { q: "What can travel around the world while staying in a corner?", a: ["stamp", "a stamp"], hint: "Licked and stuck." },
+  { q: "What gets bigger the more you take away from it?", a: ["hole", "a hole"], hint: "Dig." },
+  { q: "What has cities but no houses, mountains but no trees, and water but no fish?", a: ["map", "a map"], hint: "Fold it badly." },
+  { q: "What invention lets you look right through a wall?", a: ["window", "a window"], hint: "Clean it." },
+  { q: "I speak without a mouth and hear without ears. What am I?", a: ["echo", "an echo"], hint: "Shout in a canyon." },
+  { q: "What has to be broken before you can use it?", a: ["egg", "an egg"], hint: "Breakfast." },
+  { q: "What is so fragile that saying its name breaks it?", a: ["silence"], hint: "Shhh." },
+  { q: "What goes through cities and fields but never moves?", a: ["road", "a road", "street", "path"], hint: "You drive on it." },
+  { q: "What has a thumb and four fingers but isn't alive?", a: ["glove", "a glove"], hint: "Winter." },
+  { q: "The person who makes it sells it. The person who buys it never uses it. What is it?", a: ["coffin", "a coffin"], hint: "A grim one." },
+];
+const RIDDLE_GAP_MS = 1500;             // between guesses, per visitor
+const RIDDLE_GUESS_MAX = 40;
+const RIDDLE_SOLVERS_KEPT = 200;
+
 const JAM_START = [0x1111, 0x1010, 0x5555, 0x0000, 0x0000, 0x0000, 0x0204, 0x0000, 0x2040, 0x0000, 0x8101, 0x0000];
 
 // ---- The Worker: checks the request, then hands it to the lobby --------------
@@ -148,7 +187,7 @@ export class Lobby extends DurableObject {
     // object wakes up after sleeping ("hibernation"), so nothing is lost.
     ctx.blockConcurrencyWhile(async () => {
       const keys = ["shouts", "nextShoutId", "game", "palette", "total", "suggestions", "nextId",
-                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug"];
+                    "event", "lastEvent", "nextEventAt", "visits", "notes", "magnets", "lastHoldWin", "jam", "polls", "tug", "riddle"];
       for (const p of PAGES) keys.push(`stickers:${p}`, `wear:${p}`);
       const saved = await ctx.storage.get(keys);
 
@@ -170,6 +209,7 @@ export class Lobby extends DurableObject {
       this.jam = saved.get("jam") || { bpm: 108, epoch: Date.now(), grid: [...JAM_START] };
       this.polls = saved.get("polls") || [];
       this.tug = saved.get("tug") || { pos: 0, red: 0, blue: 0 };
+      this.riddle = saved.get("riddle") || { day: -1, solvers: [], guesses: 0 };
       // Magnets start scattered at random, then stay wherever people leave them.
       this.magnets = saved.get("magnets") || MAGNET_WORDS.map(() => [randomInt(10, 900), randomInt(10, 700)]);
 
@@ -238,6 +278,7 @@ export class Lobby extends DurableObject {
       case "poll-report": return this.pollReport(me, msg);
       case "tug-join": return this.tugJoin(ws, me, msg);
       case "tug-pull": return this.tugPull(ws, me);
+      case "riddle-guess": return this.riddleGuess(ws, me, msg);
       case "report-note": return this.reportNote(me, msg);
       case "admin": return this.admin(ws, me, msg);
     }
@@ -283,6 +324,7 @@ export class Lobby extends DurableObject {
     if (me.page === "jam") this.send(ws, this.jamMessage());
     if (me.page === "home") this.send(ws, { type: "polls", list: this.publicPolls(me.id) });
     if (me.page === "tug") this.send(ws, this.tugMessage());
+    if (me.page === "riddle") this.send(ws, this.riddleMessage(me.id));
     this.broadcast(this.paletteMessage());
     this.broadcastPresence();
     await this.count(`visit:${msg.page === "admin" ? "admin" : me.page || "other"}`, me.id);
@@ -872,6 +914,59 @@ export class Lobby extends DurableObject {
     await this.savePolls();
   }
 
+  // ---- Daily riddle -----------------------------------------------------------------------
+  // Today's riddle comes from the date, so everyone gets the same one.  Ids of solvers are
+  // kept (to count each person once) but only their chosen names are ever sent out.
+
+  riddleDay() { return Math.floor(Date.now() / 864e5); }
+
+  // Start a fresh tally when the date has changed.
+  riddleToday() {
+    const day = this.riddleDay();
+    if (this.riddle.day !== day) this.riddle = { day, solvers: [], guesses: 0 };
+    return this.riddle;
+  }
+
+  riddleMessage(id) {
+    const r = this.riddleToday();
+    const yesterday = RIDDLES[(r.day - 1) % RIDDLES.length];
+    return {
+      type: "riddle",
+      q: RIDDLES[r.day % RIDDLES.length].q,
+      hint: RIDDLES[r.day % RIDDLES.length].hint,
+      solved: r.solvers.some((s) => s.by === id),
+      solvers: r.solvers.slice(0, 20).map((s) => s.name),
+      solverCount: r.solvers.length,
+      guesses: r.guesses,
+      yesterday: { q: yesterday.q, a: yesterday.a[0] },
+    };
+  }
+
+  async riddleGuess(ws, me, msg) {
+    if (me.page !== "riddle") return;
+    const guess = riddleNorm(clean(msg.text, RIDDLE_GUESS_MAX));
+    if (!guess) return;
+    const now = Date.now();
+    if (now - (me.lastGuess || 0) < RIDDLE_GAP_MS) return;
+    me.lastGuess = now;
+    ws.serializeAttachment(me);
+    const r = this.riddleToday();
+    if (r.solvers.some((s) => s.by === me.id)) return this.send(ws, this.riddleMessage(me.id));
+    r.guesses += 1;
+    const right = RIDDLES[r.day % RIDDLES.length].a.some((a) => riddleNorm(a) === guess);
+    if (right) {
+      if (r.solvers.length < RIDDLE_SOLVERS_KEPT) r.solvers.push({ by: me.id, name: clean(msg.name, NAME_MAX) || "Someone" });
+      await this.count("riddle-solve", me.id);
+    }
+    await this.ctx.storage.put("riddle", r);
+    this.send(ws, { type: "riddle-result", right });
+    // Everyone on the page sees the new tally; the solver sees themselves ticked off.
+    for (const sock of this.ctx.getWebSockets()) {
+      const a = sock.deserializeAttachment();
+      if (a?.id && a.page === "riddle") this.send(sock, this.riddleMessage(a.id));
+    }
+  }
+
   // ---- Tug of war -------------------------------------------------------------------------
 
   tugMessage(winner, leaving) {
@@ -1244,6 +1339,11 @@ function shortHash(text) {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
   return h.toString(36);
+}
+
+// Compare riddle answers loosely: lower case, letters and digits only, no leading a/an/the.
+function riddleNorm(text) {
+  return String(text).toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/^(a|an|the) /, "").replace(/ /g, "");
 }
 
 function randomInt(min, max) {
