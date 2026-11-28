@@ -16,6 +16,7 @@ export const ROOMS = [
   { page: "magnets", title: "Fridge magnets", emoji: "🧲" },
   { page: "note", title: "Pass it on", emoji: "✉️" },
   { page: "tug", title: "Tug of war", emoji: "🪢" },
+  { page: "riddle", title: "Daily riddle", emoji: "🧩" },
   { page: "chess", title: "Chess", emoji: "♟️" },
   { page: "live", title: "Live data", emoji: "📡" },
   { page: "playground", title: "Playground", emoji: "🎲" },
